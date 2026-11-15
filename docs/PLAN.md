@@ -428,6 +428,12 @@ it before Apply; the defaults keep the look as it was (glow off):
 - **Drops per column** (`Drops`, 1 to 4): the drops are a loop over seeds 7·i; seeds 0 and 7 are
   the two of before.
 - **Trail length** (`TrailLength`, ×0.25 to ×2): scales the 8-rows-to-70 %-of-the-screen range.
+  Since 2026-11-15 a drop's trail length also follows its speed, as if each glyph faded over time
+  once the head had passed (owner: "the faster a drop falls, the shorter its tail… shouldn't that
+  be the other way around?"): ×1.5 × speed, so the fastest get about 1.5 times the drawn length
+  and the slowest about half, the same on average. Before, the two were drawn independently
+  (measured: correlation −0.04 to +0.07 over 512 columns), and a fast drop with a short tail
+  looked wrong. `check_faster_drops_leave_longer_trails`.
 - **Trail fade** (`TrailCurve`): the trail's light is (1 − distance from the head / length)^curve.
   The slider is logarithmic so that 1 (even) is in its middle.
 - **Head glow** (`Glow`, `GlowSize`): a halo around each head in the cell's colour, whitened a
@@ -458,8 +464,8 @@ band the eye reads as judder (60–90 Hz at 4 px is fused, 3–4 Hz at 64 px rea
 | Motion | | unevenness, 16–64 px |
 |---|---|---|
 | 0, steps | the light steps cell by cell | 0.49–0.71 |
-| 1, smooth light over the glyphs (default) | everything on the grid; the head's highlight is a symmetric bump of light (σ 0.5 rows) with a soft front | 0.20–0.43 |
-| 2, smooth falling heads | the head is a glyph of its own, falling at its exact position, drawn between texel rows so it moves by fractions of a pixel, over the fixed glyphs (only its strokes cover them); the trail lights up across its height | 0.06–0.14 |
+| 1, smooth light over the glyphs | everything on the grid; the head's highlight is a symmetric bump of light (σ 0.5 rows) with a soft front | 0.20–0.43 |
+| 2, smooth falling heads (default) | the head is a glyph of its own, falling at its exact position, drawn between texel rows so it moves by fractions of a pixel, over the fixed glyphs (only its strokes cover them); the trail lights up across its height | 0.06–0.14 |
 
 Motion 1 cannot be made perfectly smooth: the light is, but it is visible only on glyph ink,
 which is fixed and broken into shapes with gaps between rows, so the visible white stalls at
@@ -471,6 +477,22 @@ that glyph, on top of it) and crossfades evenly to the next cell's as it slides.
 character for its whole fall measured 0.00–0.05; switching costs a little, and switching at once
 cost as much as motion 1 (0.17–0.42), hence the even crossfade. The first falling version hid
 the fixed glyphs in the head's row, which looked like a black box cutting off the tail.
+
+Falling heads became the default (owner, 2026-11-15). Comparing the first pushed version with
+today's on-grid mode on the desktop, the owner found the smoothness "pretty much identical" in the
+end: the on-grid light was never buttery smooth, only the falling heads are.
+
+A falling head shows katakana and the digits 1, 2, 4 and 7, never a sign or 0, 3, 5, 6, 8, 9.
+Signs were too short (owner: a head switching to ". : +"
+looked as if it had vanished), and several digits look alike (0/9, 3/8, 5/6): a head morphing
+between two of them looked frozen ("as if its animation froze"); 1, 2, 4 and 7 differ from every
+katakana by at least 0.44 and came back after the owner missed numbers in the heads (2 and 7 are
+alike, 0.35, and share a half). For a cell holding one of the others the head shows a stand-in, its own per cell, from the same half of the set. The
+katakana are ordered so that measured look-alikes (16–30 px: ｦｳｵｻｿﾂﾃﾅﾎﾗﾘﾜ, ｴｺﾆﾕ, ｱｽﾇ, ｾﾔ) sit at
+places of the same parity, i.e. in the same half, so they can never follow each other (2 and 7 too): the most
+alike pair a head can morph between now differs by 0.36 (pixel difference over total ink),
+against 0.21 before. The trail's glyphs are not filtered. `check_look_alike_heads_never_neighbours`
+guards the order.
 
 A glyph never repeats the one above it: even rows draw from the glyphs at even places in the
 set, odd rows from the odd ones, so the falling head always visibly changes and no trail shows
