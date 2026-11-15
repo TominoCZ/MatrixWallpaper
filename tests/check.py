@@ -118,13 +118,17 @@ def check_light_glides_through_glyphs() -> None:
     assert gliding >= 5, f"with glide 1 the front should be inside some glyphs, found {gliding}"
 
 
-def check_it_fades_smoothly() -> None:
-    # Ten frames a tenth of a tick apart. A column with a drop in it must look different in
-    # every one of them; a rain that moves in whole steps changes once or twice in that time.
+def check_it_fades_smoothly_for_years() -> None:
+    # Ten frames a tenth of a row apart. A column with a drop in it must look different in every
+    # one of them; a rain that moves in steps changes once or twice in that time. Checked at the
+    # start and after about a year of running (1e9 rows at 30 rows a second): a clock held in
+    # one 32-bit float loses its fraction as it grows, and after five hours the motion went
+    # coarse.
     window = rain.view(480, 240, trailFloor=0, cellHeight=20)
-    frames = [rain.grab(window, 100 + step / 10) for step in range(10)]
-    smooth = sum(len({rain.mean_rgb(f, QRect(x, 0, 12, 240)) for f in frames}) == 10 for x in range(0, 480, 12))
-    assert smooth >= 30, f"only {smooth} of 40 columns change with every tenth of a tick"
+    for start in (100, 1e9):
+        frames = [rain.grab(window, start + step / 10) for step in range(10)]
+        smooth = sum(len({rain.mean_rgb(f, QRect(x, 0, 12, 240)) for f in frames}) == 10 for x in range(0, 480, 12))
+        assert smooth >= 30, f"at tick {start:g} only {smooth} of 40 columns change with every tenth of a row"
 
 
 def check_it_moves_and_repeats() -> None:
@@ -160,6 +164,12 @@ def check_clock_runs_with_the_display() -> None:
     root.setProperty("speed", 400)  # and starts again by itself
     spin(0.5)
     assert root.property("frames") - idle > 50, "the clock did not start again after speed 0"
+    window.hide()  # as when the screen goes off or is locked: no frames, and none asked for
+    spin(0.3)
+    hidden = root.property("frames")
+    window.show()
+    spin(0.7)
+    assert root.property("frames") - hidden > 50, "the clock did not start again after the window was hidden"
     window.close()
     assert fps > 0.9 * refresh, f"{fps:.0f} frames a second on a {refresh:.0f} Hz display"
     assert abs(rows - 20) < 2, f"fell {rows:.1f} rows a second, 400 px/s in 20 px rows is 20"

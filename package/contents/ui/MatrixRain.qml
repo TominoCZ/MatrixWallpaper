@@ -18,7 +18,7 @@ Item {
     property bool logFrameRate: false       // write the measured frame rate to the log every 2 s
     property bool running: true
     property real tick: 0                   // the rain's clock, in rows fallen by the fastest drops
-    property int frames: 0                  // frames shown since the start, for measuring the frame rate
+    property real frames: 0                 // frames shown since the start, for measuring the frame rate
 
     readonly property int cellWidth: Math.round(cellHeight * 0.6)
     // The nearest whole number of cells, spread over exactly the screen: no cell is cut at an
@@ -50,15 +50,16 @@ Item {
             if (gap < 100 && gap > 1.5 * root.frameTime)
                 root.lateFrames += 1;
             root.worstGap = Math.max(root.worstGap, gap < 100 ? gap : 0);
-            // A long gap is a pause (window covered, machine asleep), not a slow frame.
-            if (now - root.shownAt < 100)
-                root.frameTime += (now - root.shownAt - root.frameTime) * 0.05;
+            // A long gap is a pause (window covered, machine asleep), not a slow frame; a
+            // negative one is the system clock being set back, not time running backwards.
+            if (gap > 0 && gap < 100)
+                root.frameTime += (gap - root.frameTime) * 0.05;
             root.shownAt = now;
             root.frames += 1;
-            // ponytail: the tick is a 32-bit float in the shader, so it wraps before it gets
-            // coarse: one visible jump every 2^20 rows (12 hours at the default speed). A
-            // second uniform carrying the high part would remove it.
-            root.tick = (root.tick + root.frameTime * root.speed / root.cellHeight / 1000) % 1048576;
+            // ponytail: the shader takes the tick in two parts that stay exact while the high
+            // part fits a float's 24 bits, i.e. below 2^31 rows: one visible jump after that
+            // (2.3 years at the default speed and cell size).
+            root.tick = (root.tick + root.frameTime * root.speed / root.cellHeight / 1000) % 2147483648;
         }
     }
     // The only way to know the frame rate inside plasmashell: `./run.sh perf` switches this on
@@ -125,7 +126,8 @@ Item {
         anchors.fill: parent
         blending: false                     // opaque: nothing behind it has to be drawn
 
-        readonly property real tick: root.tick
+        readonly property real tickHigh: Math.floor(root.tick / 128)
+        readonly property real tickLow: root.tick - tickHigh * 128
         readonly property real glyphCount: root.glyphList.length
         readonly property real trailFloor: root.trailFloor
         readonly property real lift: root.lift

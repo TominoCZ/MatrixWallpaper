@@ -12,6 +12,7 @@
     <entry name="CellHeight" type="Int">
       <label>Height of one glyph cell in pixels. Smaller cells give a finer picture and, at the same speed, more steps a second.</label>
       <default>16</default>
+      <min>4</min>
     </entry>
     <entry name="Speed" type="Double">
       <label>How fast the rain falls: pixels per second for the fastest drops. The slowest fall at a third of it. A smaller cell therefore steps more often.</label>
