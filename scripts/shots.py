@@ -1,0 +1,128 @@
+"""Render every named state of the effect off-screen and audit each frame.
+
+    ./run.sh shots          every shot, plus the contact sheet .dev/shots/sheet.png
+    ./run.sh shots rain     the shots whose name starts with "rain", with their own sheet
+    ./run.sh shots =rain    only the shot named "rain"
+
+The exit code is the number of faulty shots. A green audit is not a good-looking frame: open
+the PNGs and look.
+"""
+
+import sys
+from pathlib import Path
+
+from PyQt6.QtCore import QRect, Qt
+from PyQt6.QtGui import QColor, QImage, QPainter
+
+import rain
+
+OUT = rain.ROOT / ".dev/shots"
+TICK = 200  # far enough in that every column has a drop somewhere
+LIT = bytes(1 if value > 40 else 0 for value in range(256))
+
+
+def fixture() -> Path:
+    return rain.bands(OUT / "fixture-bands.png", (1280, 720))
+
+
+def dark_fixture() -> Path:
+    return rain.bands(OUT / "fixture-dark.png", (1280, 720), shade=204)  # a fifth as bright
+
+
+def screen_size() -> tuple[int, int]:
+    size = rain.app.primaryScreen().size()
+    return size.width(), size.height()
+
+
+# name -> (window size, image, properties). A missing image skips the shot.
+SHOTS = {
+    "rain": lambda: ((1280, 720), fixture(), {}),
+    "rain-green": lambda: ((1280, 720), None, {}),
+    "rain-big": lambda: ((1280, 720), fixture(), {"cellHeight": 40}),
+    "rain-small": lambda: ((480, 270), fixture(), {}),
+    "rain-odd-size": lambda: ((1003, 409), fixture(), {"trailFloor": 0.5}),  # 83.6 x 20.45 cells
+    "glide-none": lambda: ((1280, 720), fixture(), {"glide": 0, "cellHeight": 40}),
+    "glide-full": lambda: ((1280, 720), fixture(), {"glide": 1, "cellHeight": 40}),
+    "floor-none": lambda: ((1280, 720), fixture(), {"trailFloor": 0}),
+    "floor-half": lambda: ((1280, 720), fixture(), {"trailFloor": 0.5}),
+    "lift-none": lambda: ((1280, 720), dark_fixture(), {"lift": 0}),
+    "lift-half": lambda: ((1280, 720), dark_fixture(), {"lift": 0.5}),
+    "lift-full": lambda: ((1280, 720), dark_fixture(), {"lift": 1}),
+    "photo": lambda: (screen_size(), rain.current_wallpaper() or "", {}),
+    "photo-lift-none": lambda: (screen_size(), rain.current_wallpaper() or "", {"lift": 0}),
+    "photo-lift-most": lambda: (screen_size(), rain.current_wallpaper() or "", {"lift": 0.75}),
+    "photo-lift-full": lambda: (screen_size(), rain.current_wallpaper() or "", {"lift": 1}),
+    "photo-floor-none": lambda: (screen_size(), rain.current_wallpaper() or "", {"trailFloor": 0}),
+    "photo-floor-half": lambda: (screen_size(), rain.current_wallpaper() or "", {"trailFloor": 0.5}),
+}
+
+
+def lit_fraction(frame: QImage) -> float:
+    """The share of pixels that are clearly not black (in the brightest channel)."""
+    pixels = frame.convertToFormat(QImage.Format.Format_RGBX8888)
+    data = pixels.constBits().asstring(pixels.sizeInBytes())
+    return max(data[c::4].translate(LIT).count(1) for c in range(3)) / (frame.width() * frame.height())
+
+
+def audit(frame: QImage, size: tuple[int, int], warnings: list[str]) -> list[str]:
+    faults = [f"Qt warned: {text}" for text in warnings]
+    if (frame.width(), frame.height()) != size:
+        faults.append(f"frame is {frame.width()}x{frame.height()}, asked for {size[0]}x{size[1]}")
+    lit = lit_fraction(frame)
+    if lit < 0.003:
+        faults.append(f"almost nothing drawn ({lit:.2%} of the pixels lit)")
+    if lit > 0.15:  # glyph strokes light at most 10% of a frame, even with every cell lit; whole cells, 21% and up
+        faults.append(f"flooded ({lit:.0%} of the pixels lit): the glyph mask is not applied")
+    return faults
+
+
+def render(name: str) -> tuple[QImage | None, list[str]]:
+    size, image, props = SHOTS[name]()
+    if image == "" or (image and not Path(image).exists()):
+        return None, []
+    seen = len(rain.messages)
+    frame = rain.grab(rain.view(*size, image, **props), TICK)
+    frame.save(str(OUT / f"{name}.png"))
+    return frame, audit(frame, size, rain.messages[seen:])
+
+
+def sheet(frames: dict[str, QImage], path: Path) -> None:
+    """Every frame at 640 px wide, two to a row, with its name."""
+    thumbs = {name: f.scaledToWidth(640, Qt.TransformationMode.SmoothTransformation) for name, f in frames.items()}
+    row = max(t.height() for t in thumbs.values()) + 28
+    page = QImage(2 * 650, row * ((len(thumbs) + 1) // 2), QImage.Format.Format_RGB32)
+    page.fill(QColor("#202020"))
+    painter = QPainter(page)
+    painter.setPen(QColor("white"))
+    for i, (name, thumb) in enumerate(thumbs.items()):
+        x, y = (i % 2) * 650, (i // 2) * row
+        painter.drawText(QRect(x + 4, y, 640, 24), Qt.AlignmentFlag.AlignVCenter, name)
+        painter.drawImage(x, y + 24, thumb)
+    painter.end()
+    page.save(str(path))
+
+
+def main(pick: str) -> int:
+    names = [n for n in SHOTS if (n == pick[1:] if pick.startswith("=") else n.startswith(pick))]
+    if not names:
+        sys.exit(f"no shot matches {pick!r}; there are: {', '.join(SHOTS)}")
+    OUT.mkdir(parents=True, exist_ok=True)
+    frames, faulty = {}, 0
+    for name in names:
+        frame, faults = render(name)
+        if frame is None:
+            print(f"- {name}: skipped, no image")
+            continue
+        frames[name] = frame
+        faulty += bool(faults)
+        print(f"{'✗' if faults else '✓'} {name}  {frame.width()}x{frame.height()}")
+        for fault in faults:
+            print(f"    {fault}")
+    if len(frames) > 1:
+        sheet(frames, OUT / (f"sheet-{pick}.png" if pick else "sheet.png"))
+    print(f"{len(frames)} shots in {OUT.relative_to(rain.ROOT)}/, {faulty} faulty")
+    return faulty
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else ""))

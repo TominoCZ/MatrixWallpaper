@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="Image" type="String">
+      <label>Path of the image the rain takes its colours from. Empty: classic green.</label>
+      <default></default>
+    </entry>
+    <entry name="CellHeight" type="Int">
+      <label>Height of one glyph cell in pixels. Smaller cells give a finer picture and, at the same speed, more steps a second.</label>
+      <default>16</default>
+    </entry>
+    <entry name="Speed" type="Double">
+      <label>How fast the rain falls: pixels per second for the fastest drops. The slowest fall at a third of it. A smaller cell therefore steps more often.</label>
+      <default>480</default>
+    </entry>
+    <entry name="TrailFloor" type="Double">
+      <label>How dark a trail may get, 0 to 1. 0: it fades to black. Above 0: every glyph stays at least this bright, so the image stays visible between the drops.</label>
+      <default>0.25</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+    <entry name="Lift" type="Double">
+      <label>Brightens dark images, 0 to 1. 0: glyphs are as bright as the image is there. 1: every glyph at full brightness in its image's hue. Nothing clips in between.</label>
+      <default>0.5</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+    <entry name="Glide" type="Double">
+      <label>How the light moves, 0 to 1. 0: each glyph lights up as a whole, a cell at a time. 1: the light slides down through the glyphs pixel by pixel, as smooth as the display.</label>
+      <default>1</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+    <entry name="LogFrameRate" type="Bool">
+      <label>Write the measured frame rate to plasmashell's log every two seconds. For ./run.sh perf.</label>
+      <default>false</default>
+    </entry>
+  </group>
+</kcfg>

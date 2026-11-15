@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "TominoCZ"
+            }
+        ],
+        "Description": "Matrix rain that takes its colours from your wallpaper image",
+        "Id": "io.github.tominocz.matrixwallpaper",
+        "License": "MIT",
+        "Name": "Matrix Wallpaper",
+        "Version": "0.1",
+        "Website": "https://github.com/TominoCZ/MatrixWallpaper"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -1,0 +1,144 @@
+import QtQuick
+
+// The whole effect: one quad over the screen and one fragment shader (../shaders/rain.frag).
+// Nothing here runs per frame except the clock; every pixel is worked out on the GPU
+// from (cell, tick), so there is no particle state to keep on the CPU.
+Item {
+    id: root
+
+    property url image                      // empty: classic green
+    property int cellHeight: 16
+    property real speed: 480                // pixels per second for the fastest drops; the slowest do a third
+    property real trailFloor: 0.25          // 0: trails fade to black; above: every glyph stays this bright
+    property string glyphs: "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789:.=*+-<>|"
+    property string fontFamily: "monospace"
+    property color fallback: "#00ff41"
+    property real lift: 0.5                 // 0: the image's own brightness; 1: full brightness in each cell's hue
+    property real glide: 1                  // 0: glyphs light up whole; 1: the light slides through them
+    property bool logFrameRate: false       // write the measured frame rate to the log every 2 s
+    property bool running: true
+    property real tick: 0                   // the rain's clock, in rows fallen by the fastest drops
+    property int frames: 0                  // frames shown since the start, for measuring the frame rate
+
+    readonly property int cellWidth: Math.round(cellHeight * 0.6)
+    // The nearest whole number of cells, spread over exactly the screen: no cell is cut at an
+    // edge. A cell is then up to half a pixel off its nominal size in total across the screen.
+    readonly property int columns: Math.max(1, Math.round(width / cellWidth))
+    readonly property int rows: Math.max(1, Math.round(height / cellHeight))
+    readonly property var glyphList: Array.from(glyphs)
+    // False while the image is still being decoded; the checks wait for it before grabbing.
+    readonly property bool ready: width > 0 && colours.status !== Image.Loading
+
+    // PreserveAspectCrop is done in the shader. `shown` is the part of the image this screen
+    // shows: all of one axis, the middle of the other.
+    readonly property real stretch: colours.status === Image.Ready
+        ? (width / height) / (colours.implicitWidth / colours.implicitHeight) : 1
+    readonly property size shown: stretch > 1 ? Qt.size(1, 1 / stretch) : Qt.size(stretch, 1)
+
+    // The clock: advanced each time a frame has been shown. Changing `tick` makes the scene
+    // dirty, so Qt draws again at the next vsync, and that frame advances it again; when the
+    // window is not being shown no frame comes and the rain stands still at no cost.
+    // Not a FrameAnimation: Plasma draws on its GUI thread (Qt's basic render loop), where
+    // animations tick 62.5 times a second whatever the display does (measured; a 240 Hz
+    // screen got a 60 fps rain).
+    property real shownAt: 0                // when the last frame was shown, ms
+    property real frameTime: 4              // smoothed ms between frames: Date.now() only counts whole ms
+    Connections {
+        target: root.running ? root.Window.window : null
+        function onFrameSwapped() {
+            const now = Date.now(), gap = now - root.shownAt;
+            if (gap < 100 && gap > 1.5 * root.frameTime)
+                root.lateFrames += 1;
+            root.worstGap = Math.max(root.worstGap, gap < 100 ? gap : 0);
+            // A long gap is a pause (window covered, machine asleep), not a slow frame.
+            if (now - root.shownAt < 100)
+                root.frameTime += (now - root.shownAt - root.frameTime) * 0.05;
+            root.shownAt = now;
+            root.frames += 1;
+            // ponytail: the tick is a 32-bit float in the shader, so it wraps before it gets
+            // coarse: one visible jump every 2^20 rows (12 hours at the default speed). A
+            // second uniform carrying the high part would remove it.
+            root.tick = (root.tick + root.frameTime * root.speed / root.cellHeight / 1000) % 1048576;
+        }
+    }
+    // The only way to know the frame rate inside plasmashell: `./run.sh perf` switches this on
+    // and reads the log. A late frame came more than one and a half frame times after the last.
+    property int lateFrames: 0
+    property int worstGap: 0
+    property int loggedAt: 0
+    onLogFrameRateChanged: { loggedAt = frames; lateFrames = 0; worstGap = 0; }
+    Timer {
+        interval: 2000
+        repeat: true
+        running: root.logFrameRate
+        onTriggered: {
+            console.warn("MatrixWallpaper:", (root.frames - root.loggedAt) / 2, "frames/s,", root.lateFrames / 2,
+                         "late/s, worst gap", root.worstGap, "ms, frame time", root.frameTime.toFixed(2), "ms");
+            root.loggedAt = root.frames;
+            root.lateFrames = 0;
+            root.worstGap = 0;
+        }
+    }
+
+    // The chain stops when the tick stops changing (clock off, or speed 0), and then nothing is
+    // dirty to start it again: ask for one frame.
+    function kick() { if (running && Window.window) Window.window.update(); }
+    onRunningChanged: kick()
+    onSpeedChanged: kick()
+
+    // Decoded once, on Qt's image thread, down to about one texel per cell: the shader's
+    // single lookup per pixel then already is that cell's average colour.
+    Image {
+        id: colours
+        visible: false
+        asynchronous: true
+        fillMode: Image.PreserveAspectCrop  // tells the loader how to read sourceSize
+        sourceSize: Qt.size(root.columns, root.rows)
+        source: root.width > 0 ? root.image : ""  // not before the size is known: that would decode it in full
+    }
+
+    // The glyphs, drawn once into one row of cells and kept as a texture.
+    Row {
+        id: atlas
+        visible: false
+        layer.enabled: true
+        // Nearest texel: glyphs stay sharp although the grid is stretched by a fraction of a
+        // pixel per cell (a pixel column is doubled or dropped every few dozen cells).
+        layer.smooth: false
+        Repeater {
+            model: root.glyphList
+            Text {
+                width: root.cellWidth
+                height: root.cellHeight
+                clip: true
+                text: modelData
+                color: "white"
+                font.family: root.fontFamily
+                font.pixelSize: Math.round(root.cellHeight * 0.8)
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+    }
+
+    ShaderEffect {
+        anchors.fill: parent
+        blending: false                     // opaque: nothing behind it has to be drawn
+
+        readonly property real tick: root.tick
+        readonly property real glyphCount: root.glyphList.length
+        readonly property real trailFloor: root.trailFloor
+        readonly property real lift: root.lift
+        readonly property real glide: root.glide
+        readonly property real hasImage: colours.status === Image.Ready ? 1 : 0
+        readonly property size grid: Qt.size(root.columns, root.rows)
+        // cell position as a fraction of the grid -> image uv: xy scale, zw offset
+        readonly property vector4d crop: Qt.vector4d(
+            root.shown.width, root.shown.height, (1 - root.shown.width) / 2, (1 - root.shown.height) / 2)
+        readonly property color fallback: root.fallback
+        readonly property Item imageTex: colours
+        readonly property Item atlasTex: atlas
+
+        fragmentShader: Qt.resolvedUrl("../shaders/rain.frag.qsb")
+    }
+}
