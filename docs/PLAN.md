@@ -281,7 +281,7 @@ motion smooth the owner tried 20 px again and went back to 16.
 Below about 14 px the glyphs get thin and the rain dimmer (antialiased strokes carry less
 light); compared at 20, 16, 14, 12 and 10 px on the owner's wallpaper.
 
-### 4.13 The light slides through the glyphs (`Glide`)
+### 4.13 The light slides through the glyphs (`Glide`, now Motion: §4.19)
 
 With 240 real frames a second the rain still did not feel like it (owner, 2026-11-15), because
 nothing on screen moved: a glyph never changes place, it only gets brighter and darker, so the
@@ -443,6 +443,38 @@ screen (5120×1440, 240 fps) plasmashell's GPU share went from 30–38 % to 43�
 by up to 30 W, measured by switching it on and off three times. The planned fix: render each
 column's drop positions once per frame into a small floating-point texture and let every pixel
 look them up.
+
+### 4.19 Motion for an eye that follows a drop
+
+The owner (2026-11-15): at glyph sizes 20–30 a drop followed by eye did not look smooth, at 4
+and 64 it did. Measured by following drops' white heads frame by frame at 240 fps (spread of
+the per-frame steps over their mean, median of up to eight drops; `check_falling_heads_move_evenly`
+keeps the measure): with glyphs fixed and only the light moving, the white an eye follows
+hopped glyph to glyph, at exactly the rate the head passed glyph rows: 8–17 Hz at 20–30 px, the
+band the eye reads as judder (60–90 Hz at 4 px is fused, 3–4 Hz at 64 px reads as structure).
+
+`Glide` became a three-way **Motion** setting:
+
+| Motion | | unevenness, 16–64 px |
+|---|---|---|
+| 0, steps | the light steps cell by cell | 0.49–0.71 |
+| 1, smooth light over the glyphs (default) | everything on the grid; the head's highlight is a symmetric bump of light (σ 0.5 rows) with a soft front | 0.20–0.43 |
+| 2, smooth falling heads | the head is a glyph of its own, falling at its exact position, drawn between texel rows so it moves by fractions of a pixel, over the fixed glyphs (only its strokes cover them); the trail lights up across its height | 0.06–0.14 |
+
+Motion 1 cannot be made perfectly smooth: the light is, but it is visible only on glyph ink,
+which is fixed and broken into shapes with gaps between rows, so the visible white stalls at
+each gap. No highlight width got it below about 0.2 (σ 0.3 to 1.2 tried); switching glyph swaps
+off helped a little. Only something that moves is perfectly smooth.
+
+In motion 2 the head shows the character of the grid cell it passes (lined up with a cell it is
+that glyph, on top of it) and crossfades evenly to the next cell's as it slides. A head with one
+character for its whole fall measured 0.00–0.05; switching costs a little, and switching at once
+cost as much as motion 1 (0.17–0.42), hence the even crossfade. The first falling version hid
+the fixed glyphs in the head's row, which looked like a black box cutting off the tail.
+
+A glyph never repeats the one above it: even rows draw from the glyphs at even places in the
+set, odd rows from the odd ones, so the falling head always visibly changes and no trail shows
+the same character twice in a row. Two rows apart a repeat is still possible (about 1 in 28).
 
 ## 5. The look
 

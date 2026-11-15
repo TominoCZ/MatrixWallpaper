@@ -25,12 +25,13 @@ The same screenshot at real size:
 - **The picture stays visible.** Trails do not fade to black unless you want them to: every
   glyph keeps a minimum brightness, so the whole picture shows as a mosaic of characters with
   the drops running through it.
-- **As smooth as your screen.** It draws once per displayed frame, and the light slides down
-  through the glyphs pixel by pixel instead of jumping a cell at a time. Measured at 240 frames
-  a second on a 240 Hz display.
+- **As smooth as your screen.** It draws once per displayed frame (measured at 240 frames a
+  second on a 240 Hz display), and the light moves pixel by pixel instead of a cell at a time.
+  With *smooth falling heads* the white head you follow with your eye moves perfectly evenly.
 - **All on the GPU.** The whole effect is one fragment shader: one draw call, two texture
   lookups per pixel, no particle simulation on the CPU.
 - **Fits the screen.** The glyph grid ends exactly at the screen's edges; no column is cut.
+- **No stutters in the characters.** A glyph never repeats the one above it.
 - **Out of the way of games.** It pauses while a fullscreen window has the focus.
 - **Icons, widgets and panels untouched.** It is a Plasma wallpaper plugin, not a window drawn
   over your desktop.
@@ -83,7 +84,7 @@ effect at once:
 | `Speed` | Pixels per second for the fastest drops; the slowest fall at a third of it. `0` stops the rain, and with it everything it costs. | `480` |
 | `TrailFloor` | How dark a glyph may get, 0 to 1. `0` lets trails fade to black, as in the film; higher keeps more of the picture on screen. | `0.25` |
 | `Lift` | Brightens dark pictures, 0 to 1. `0` leaves each glyph as dark as the picture is there; `1` gives every glyph full brightness in its own colour. | `0.5` |
-| `Glide` | `1`: the light slides down through the glyphs. `0`: each glyph lights up as a whole, a cell at a time. | `1` |
+| `Glide` | Motion. `0`: steps, each glyph lights up as a whole, cell by cell. `1`: the light moves smoothly over the glyphs, everything stays on the grid. `2`: smooth falling heads, the white head is a glyph of its own falling smoothly, showing the character of the cell it passes; the smoothest to follow with the eye. | `1` |
 | `Glow` | A soft halo around each drop's head, in its colour, spilling into the gaps between glyphs, 0 to 1. `0`: none. Costs GPU time (below). | `0` |
 | `GlowSize` | The halo's radius, in glyph heights, 0.2 to 1.5. | `0.8` |
 | `Drops` | Drops falling in each column at once, 1 to 4. | `2` |
