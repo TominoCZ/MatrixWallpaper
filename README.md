@@ -84,6 +84,11 @@ effect at once:
 | `TrailFloor` | How dark a glyph may get, 0 to 1. `0` lets trails fade to black, as in the film; higher keeps more of the picture on screen. | `0.25` |
 | `Lift` | Brightens dark pictures, 0 to 1. `0` leaves each glyph as dark as the picture is there; `1` gives every glyph full brightness in its own colour. | `0.5` |
 | `Glide` | `1`: the light slides down through the glyphs. `0`: each glyph lights up as a whole, a cell at a time. | `1` |
+| `Glow` | A soft halo around each drop's head, in its colour, spilling into the gaps between glyphs, 0 to 1. `0`: none. Costs GPU time (below). | `0` |
+| `GlowSize` | The halo's radius, in glyph heights, 0.2 to 1.5. | `0.8` |
+| `Drops` | Drops falling in each column at once, 1 to 4. | `2` |
+| `TrailLength` | Trail lengths scaled by this, 0.25 to 2. | `1` |
+| `TrailCurve` | How a trail fades from its head: `1` evenly, more quickly after the head (up to 4), less stays bright and drops at the end (down to 0.25). | `1` |
 
 ```sh
 ./run.sh set Image "/home/you/Pictures/some picture.jpg"
@@ -99,6 +104,9 @@ screen draws a quarter as many frames.
 
 `./run.sh perf` measures it on your machine: CPU, GPU, and the frame rate the wallpaper
 really reaches.
+
+The head glow adds to that: on the same screen it raised plasmashell's GPU share from about a
+third to about 45 %.
 
 It **pauses while a fullscreen window has the focus**, such as a game, borderless or not: then
 it draws nothing and plasmashell is back to about 1 % of a core. It keeps running behind ordinary

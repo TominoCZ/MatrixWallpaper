@@ -89,7 +89,7 @@ the screen (as "scaled and cropped" does) is two numbers passed to the shader.
 | File | Does |
 |---|---|
 | `package/metadata.json` | Tells Plasma this is a wallpaper, and its id `io.github.tominocz.matrixwallpaper`. |
-| `package/contents/config/main.xml` | The settings and their defaults: `Image`, `CellHeight`, `Speed`, `TrailFloor`, `Lift`, `Glide`, `LogFrameRate`. |
+| `package/contents/config/main.xml` | The settings and their defaults: `Image`, `CellHeight`, `Speed`, `TrailFloor`, `Lift`, `Glide`, `Glow`, `GlowSize`, `Drops`, `TrailLength`, `TrailCurve`, `LogFrameRate`. |
 | `package/contents/ui/main.qml` | What Plasma loads: a `WallpaperItem` that hands the settings to `MatrixRain` and pauses it while a fullscreen window has the focus (§4.16). |
 | `package/contents/ui/config.qml` | The settings page in Plasma's desktop dialog: picture, glyph size, speed, trail floor, lift, glide, and a live preview that is `MatrixRain` itself (§4.17). |
 | `package/contents/ui/MatrixRain.qml` | The effect: frame clock, image texture, glyph texture, the shader's inputs. Plain QtQuick, no KDE imports. |
@@ -418,6 +418,31 @@ must draw, wait for pictures, and draw again until nothing changes; and fixture 
 written to a temporary name and swapped in, because a view still loading the previous copy read
 a half-written file. `MatrixRain.ready` now waits for the picture itself (ready or failed): it
 used to say ready in the moment between the source being set and its loading starting.
+
+### 4.18 Tuning knobs, and the head glow
+
+The owner chose four parts of the look to tune by eye (2026-11-15), most of all the glow. Each is
+a setting with a control in a "Tuning" section of the settings page, so the live preview shows
+it before Apply; the defaults keep the look as it was (glow off):
+
+- **Drops per column** (`Drops`, 1 to 4): the drops are a loop over seeds 7·i; seeds 0 and 7 are
+  the two of before.
+- **Trail length** (`TrailLength`, ×0.25 to ×2): scales the 8-rows-to-70 %-of-the-screen range.
+- **Trail fade** (`TrailCurve`): the trail's light is (1 − distance from the head / length)^curve.
+  The slider is logarithmic so that 1 (even) is in its middle.
+- **Head glow** (`Glow`, `GlowSize`): a halo around each head in the cell's colour, whitened a
+  little, added on top of the glyphs so it lights the gaps between them. Its falloff
+  (1 − d²/r²)² reaches exactly zero at the radius, and each pixel looks at the heads of two
+  columns either side, with the radius held to what those cover, so no seam shows at a column
+  edge.
+
+The clipped "|" (it reached past its cell in this font) is no longer among the glyphs.
+
+The glow is the costly part: each pixel works out ten drops instead of two. On the owner's
+screen (5120×1440, 240 fps) plasmashell's GPU share went from 30–38 % to 43–45 % and board power
+by up to 30 W, measured by switching it on and off three times. The planned fix: render each
+column's drop positions once per frame into a small floating-point texture and let every pixel
+look them up.
 
 ## 5. The look
 
