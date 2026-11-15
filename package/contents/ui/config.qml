@@ -143,13 +143,13 @@ Kirigami.FormLayout {
     }
     Hint { text: "Dark parts gain the most and keep their colour. 100 % gives every glyph full brightness." }
 
-    QQC2.CheckBox {
+    QQC2.ComboBox {
         Kirigami.FormData.label: "Motion:"
-        text: "Light slides down through the glyphs"
-        checked: page.cfg_Glide > 0.5
-        onToggled: page.cfg_Glide = checked ? 1 : 0
+        model: ["Steps, cell by cell", "Smooth light over the glyphs", "Smooth falling heads"]
+        currentIndex: Math.round(page.cfg_Glide)
+        onActivated: index => page.cfg_Glide = index
     }
-    Hint { text: "Off: each glyph lights up as a whole, one cell at a time." }
+    Hint { text: "Falling heads are the smoothest to follow with the eye; their white head glyph moves between the rows of the grid." }
 
     Kirigami.Separator {
         Kirigami.FormData.isSection: true

@@ -9,6 +9,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 from PyQt6.QtCore import QRect
+from PyQt6.QtGui import QImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import rain  # noqa: E402
@@ -91,7 +92,8 @@ def check_grid_ends_at_the_edges() -> None:
     # all round.
     # With every glyph fully lit, a cut glyph shows as lit pixels in the outermost line. Digits
     # only: they keep clear of their cell's border, which "|" does not.
-    frame = rain.grab(rain.view(500, 250, trailFloor=1, cellHeight=20, glyphs="0123456789"), 200)
+    # Glide off: with it, a head glyph entering at the top slides in and is rightly drawn in part.
+    frame = rain.grab(rain.view(500, 250, trailFloor=1, cellHeight=20, glyphs="0123456789", glide=0), 200)
     edges = {"left": QRect(0, 0, 1, 250), "right": QRect(499, 0, 1, 250), "top": QRect(0, 0, 500, 1), "bottom": QRect(0, 249, 500, 1)}
     for name, line in edges.items():
         assert rain.mean_rgb(frame, line) == (0, 0, 0), f"glyphs are cut off at the {name} edge"
@@ -135,7 +137,7 @@ def check_settings_page_covers_every_setting() -> None:
     # Plasma hands the page a cfg_<Key> for each setting it declares and reads them back on
     # Apply. Each must be there and survive the trip through its control (LogFrameRate has none).
     keys = [e.get("name") for e in ElementTree.parse(rain.ROOT / "package/contents/config/main.xml").findall(".//{*}entry")]
-    values = {"Image": "/tmp/a picture #1.jpg", "CellHeight": 18, "Speed": 300, "TrailFloor": 0.4, "Lift": 0.6, "Glide": 0,
+    values = {"Image": "/tmp/a picture #1.jpg", "CellHeight": 18, "Speed": 300, "TrailFloor": 0.4, "Lift": 0.6, "Glide": 2,
               "LogFrameRate": True, "Drops": 3, "TrailLength": 1.5, "TrailCurve": 2.0, "Glow": 0.5, "GlowSize": 1.0}
     assert set(keys) == set(values), f"settings and test values differ: {sorted(set(keys) ^ set(values))}"
     window = rain.load(rain.ROOT / "package/contents/ui/config.qml", 700, 600, {f"cfg_{k}": v for k, v in values.items()})
@@ -170,15 +172,63 @@ def check_tuning_knobs_do_what_they_say() -> None:
     def light(**props) -> float:
         for key, value in props.items():
             root.setProperty(key, value)
-        frame = rain.grab(window, 200)
+        # Averaged over four moments: one frame may hold few drops. Longer trails also lengthen
+        # the gap before a drop comes round again, so their gain is well below proportional.
+        total = sum(brightness(rain.grab(window, tick)) for tick in (100, 200, 300, 400))
         for key in props:  # back to the defaults for the next measurement
             root.setProperty(key, {"glow": 0, "drops": 2, "trailLength": 1, "trailCurve": 1}[key])
-        return brightness(frame)
+        return total
 
     assert light(glow=1) > 1.3 * light(glow=0), "head glow does not add light"
     assert light(drops=4) > 1.5 * light(drops=1), "more drops per column do not light more"
-    assert light(trailLength=2) > 1.5 * light(trailLength=0.5), "longer trails do not light more"
+    assert light(trailLength=2) > 1.3 * light(trailLength=0.5), "longer trails do not light more"
     assert light(trailCurve=3) < 0.7 * light(trailCurve=0.5), "a quick trail fade is not darker than an even one"
+
+
+def head_unevenness(**props) -> float:
+    """Follow one drop's head for half a second at 240 fps, as an eye would: the spread of its
+    per-frame steps over their mean. Tracked is the centre of the white in its column (the head
+    is white, its trail coloured), weighted linearly as the eye roughly does."""
+    import numpy as np  # only this check needs it
+
+    window = rain.view(640, 360, trailFloor=0, drops=1, speed=400, **props)
+    root = window.rootObject()
+    cell_width, step = 640 / root.property("columns"), 400 / root.property("cellHeight") / 240
+
+    def whiteness(tick):
+        frame = rain.grab(window, tick).convertToFormat(QImage.Format.Format_RGBX8888)
+        return np.frombuffer(frame.constBits().asstring(frame.sizeInBytes()), np.uint8).reshape(360, 640, 4)[:, :, :3].min(axis=2) / 255
+
+    first = whiteness(200)  # a column whose head is in the top third, so it stays on screen
+    column = max(range(root.property("columns")), key=lambda c: first[:120, int(c * cell_width):int((c + 1) * cell_width)].max())
+    x0, x1 = int(column * cell_width), int((column + 1) * cell_width)
+    centres = []
+    for frame in range(120):
+        white = whiteness(200 + frame * step)[:, x0:x1].max(axis=1)
+        centres.append((white * np.arange(360)).sum() / max(white.sum(), 1e-9))
+    steps = np.diff(centres)
+    return steps.std() / abs(steps.mean())
+
+
+def check_falling_heads_move_evenly() -> None:
+    # Motion 2 exists for an eye following a drop: its head must move by the same amount every
+    # frame. With the head on the grid (motion 0) it moves in steps, which this must tell apart.
+    assert head_unevenness(cellHeight=24, glide=2) < 0.15, "falling heads do not move evenly"
+    assert head_unevenness(cellHeight=24, glide=0) > 0.3, "the measure cannot tell steps from even motion"
+
+
+def check_no_glyph_repeats_its_neighbour_above() -> None:
+    # Every glyph fully lit, in the green fallback (a head's whitening leaves green alone), cell
+    # by cell: two cells above each other with the same pixels show the same glyph.
+    import numpy as np  # only this check and the motion check need it
+
+    window = rain.view(640, 360, trailFloor=1, cellHeight=20, glide=0)
+    for tick in (100, 200, 300):
+        frame = rain.grab(window, tick).convertToFormat(QImage.Format.Format_RGBX8888)
+        green = np.frombuffer(frame.constBits().asstring(frame.sizeInBytes()), np.uint8).reshape(360, 640, 4)[:, :, 1]
+        cells = green[:360, :636].reshape(18, 20, 53, 12)  # 18 rows x 53 columns of 12 x 20 px
+        same = int((cells[1:] == cells[:-1]).all(axis=(1, 3)).sum())
+        assert same == 0, f"{same} glyphs repeat the one above them at tick {tick}"
 
 
 def check_it_moves_and_repeats() -> None:

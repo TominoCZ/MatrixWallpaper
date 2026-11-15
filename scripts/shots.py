@@ -44,6 +44,7 @@ SHOTS = {
     "rain-odd-size": lambda: ((1003, 409), fixture(), {"trailFloor": 0.5}),  # 83.6 x 20.45 cells
     "glide-none": lambda: ((1280, 720), fixture(), {"glide": 0, "cellHeight": 40}),
     "glide-full": lambda: ((1280, 720), fixture(), {"glide": 1, "cellHeight": 40}),
+    "glide-falling": lambda: ((1280, 720), fixture(), {"glide": 2, "cellHeight": 40}),
     "floor-none": lambda: ((1280, 720), fixture(), {"trailFloor": 0}),
     "floor-half": lambda: ((1280, 720), fixture(), {"trailFloor": 0.5}),
     "lift-none": lambda: ((1280, 720), dark_fixture(), {"lift": 0}),

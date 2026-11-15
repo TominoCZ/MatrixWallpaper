@@ -25,5 +25,6 @@ a new service adds a row here in the same change.
 |---|---|---|
 | Python 3 with PyQt6 and its Qt Quick module | `python3-pyqt6`, `python3-pyqt6.qtqml`, `python3-pyqt6.qtquick` | `./run.sh` (preview), `./run.sh shots`, `./run.sh check`, `scripts/readme.py`. Must be the distribution's build, on the system Qt; see PLAN.md §4.6. |
 | `qsb`, Qt's shader baker | `qt6-shader-baker` | `./run.sh build`, only after editing `rain.frag`; the baked `rain.frag.qsb` is in the repository, so installing and running need no baker. |
+| NumPy | `python3-numpy` | `check_falling_heads_move_evenly` in `./run.sh check` (frame-by-frame motion analysis). |
 | ffmpeg | `ffmpeg` | `scripts/readme.py`, the README's moving picture. |
 | `nvidia-smi` | comes with the NVIDIA driver | `./run.sh perf` adds GPU load and power when it is there. |

@@ -14,12 +14,14 @@ Item {
     property string fontFamily: "monospace"
     property color fallback: "#00ff41"
     property real lift: 0.5                 // 0: the image's own brightness; 1: full brightness in each cell's hue
-    property real glide: 1                  // 0: glyphs light up whole; 1: the light slides through them
+    property real glide: 1                  // motion: 0 steps; 1 smooth light on the grid; 2 the head falls as its own glyph
     property int drops: 2                   // drops per column, 1 to 4
     property real trailLength: 1            // trail lengths scaled by this
     property real trailCurve: 1             // 1: trails fade evenly; more: quickly after the head
     property real glow: 0                   // halo around each head, 0 for none
     property real glowSize: 0.8             // its radius in glyph heights (at most what two columns cover)
+    property real headWidth: 0.5            // motion 1: width of the head's highlight in rows (not a setting)
+    property real headFade: 0               // motion 2: 0 the head's character crossfades evenly; up to 0.5, quicker
     property bool logFrameRate: false       // write the measured frame rate to the log every 2 s
     property string logName: "MatrixWallpaper"  // how its log lines start; ./run.sh perf reads "MatrixWallpaper:"
     property bool running: true
@@ -169,6 +171,10 @@ Item {
         readonly property real glow: root.glow
         readonly property real glowSize: Math.max(0.05, root.glowSize)
         readonly property real cellAspect: (root.width / root.columns) / (root.height / root.rows)
+        readonly property real headWidth: root.headWidth
+        readonly property real cellPixels: root.height / root.rows
+        readonly property real atlasRows: root.cellHeight
+        readonly property real headFade: root.headFade
         readonly property real hasImage: root.showsImage ? 1 : 0
         readonly property size grid: Qt.size(root.columns, root.rows)
         // cell position as a fraction of the grid -> image uv: xy scale, zw offset

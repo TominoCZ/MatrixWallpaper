@@ -31,10 +31,10 @@
       <max>1</max>
     </entry>
     <entry name="Glide" type="Double">
-      <label>How the light moves, 0 to 1. 0: each glyph lights up as a whole, a cell at a time. 1: the light slides down through the glyphs pixel by pixel, as smooth as the display.</label>
+      <label>How the rain moves. 0: each glyph lights up as a whole, cell by cell. 1: the light moves smoothly over the glyphs. 2: the head falls smoothly as a glyph of its own (smoothest, the head leaves the grid).</label>
       <default>1</default>
       <min>0</min>
-      <max>1</max>
+      <max>2</max>
     </entry>
     <entry name="Drops" type="Int">
       <label>Drops falling in each column at once, 1 to 4.</label>
