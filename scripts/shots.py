@@ -11,8 +11,9 @@ the PNGs and look.
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QRect, Qt
+from PyQt6.QtCore import QObject, QRect, QRectF, Qt
 from PyQt6.QtGui import QColor, QImage, QPainter
+from PyQt6.QtQuick import QQuickItem
 
 import rain
 
@@ -56,6 +57,15 @@ SHOTS = {
     "photo-floor-half": lambda: (screen_size(), rain.current_wallpaper() or "", {"trailFloor": 0.5}),
 }
 
+# The settings page as Plasma's dialog would show it: name -> (window size, cfg_ properties).
+CONFIG = rain.ROOT / "package/contents/ui/config.qml"
+DEFAULTS = {"cfg_CellHeight": 16, "cfg_Speed": 480, "cfg_TrailFloor": 0.25, "cfg_Lift": 0.5, "cfg_Glide": 1}
+PAGES = {
+    "settings": lambda: ((760, 720), {**DEFAULTS, "cfg_Image": str(fixture())}),
+    "settings-green": lambda: ((760, 720), {**DEFAULTS, "cfg_Image": "", "cfg_Glide": 0, "cfg_CellHeight": 24}),
+    "settings-narrow": lambda: ((520, 900), {**DEFAULTS, "cfg_Image": str(fixture())}),
+}
+
 
 def lit_fraction(frame: QImage) -> float:
     """The share of pixels that are clearly not black (in the brightest channel)."""
@@ -76,7 +86,46 @@ def audit(frame: QImage, size: tuple[int, int], warnings: list[str]) -> list[str
     return faults
 
 
+def render_page(name: str) -> tuple[QImage, list[str]]:
+    size, props = PAGES[name]()
+    seen = len(rain.messages)
+    window = rain.load(CONFIG, *size, props)
+    root = window.rootObject()
+    preview = root.findChild(QObject, "preview")
+    # A hidden window lays its items out only when it is drawn, i.e. when grabbed, and the last
+    # pass gives the preview its final width, which starts a new load of the picture at that
+    # size. So: draw, wait for the picture, until a draw no longer changes the preview's grid.
+    grid = None
+    while grid != (grid := (preview.property("columns"), preview.property("rows"))):
+        window.grabWindow()
+        while preview.property("ready") is False:  # it loads on another thread
+            rain.app.processEvents()
+    preview.setProperty("tick", TICK)
+    frame = window.grabWindow()
+    frame.save(str(OUT / f"{name}.png"))
+    faults = [f"Qt warned: {text}" for text in rain.messages[seen:]]
+    if props.get("cfg_Image") and not preview.property("showsImage"):
+        faults.append("the preview shows the green fallback although a picture is set")
+    faults += [f"{name} reaches {edge}, outside the {size[0]}x{size[1]} window" for name, edge in outside(root, *size)]
+    return frame, faults
+
+
+def outside(item: QQuickItem, width: int, height: int):
+    """Visible items that reach past the window's edges. What a clipping item (a text field
+    scrolling a long path) holds inside is its own business and is not looked into."""
+    for child in item.childItems():
+        if not child.isVisible() or child.width() <= 0 or child.height() <= 0:
+            continue
+        box = child.mapRectToScene(QRectF(0, 0, child.width(), child.height()))
+        if box.right() > width + 0.5 or box.bottom() > height + 0.5 or box.left() < -0.5 or box.top() < -0.5:
+            yield child.metaObject().className(), f"{box.right():.0f},{box.bottom():.0f}"
+        if not child.clip():
+            yield from outside(child, width, height)
+
+
 def render(name: str) -> tuple[QImage | None, list[str]]:
+    if name in PAGES:
+        return render_page(name)
     size, image, props = SHOTS[name]()
     if image == "" or (image and not Path(image).exists()):
         return None, []
@@ -103,7 +152,7 @@ def sheet(frames: dict[str, QImage], path: Path) -> None:
 
 
 def main(pick: str) -> int:
-    names = [n for n in SHOTS if (n == pick[1:] if pick.startswith("=") else n.startswith(pick))]
+    names = [n for n in [*SHOTS, *PAGES] if (n == pick[1:] if pick.startswith("=") else n.startswith(pick))]
     if not names:
         sys.exit(f"no shot matches {pick!r}; there are: {', '.join(SHOTS)}")
     OUT.mkdir(parents=True, exist_ok=True)

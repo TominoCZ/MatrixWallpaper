@@ -8,12 +8,6 @@ import org.kde.taskmanager as TaskManager
 WallpaperItem {
     id: root
 
-    // The setting holds a path as Plasma's image wallpaper stores it; "#", "?" or "%" in a
-    // file name would otherwise be read as parts of a URL.
-    function toUrl(path) {
-        return path.startsWith("/") ? "file://" + path.split("/").map(encodeURIComponent).join("/") : path;
-    }
-
     // Paused while the focused window on this screen is fullscreen, or covers the whole screen
     // (a borderless game that does not say it is fullscreen). KWin keeps sending frames to a
     // covered desktop (measured with a fullscreen application: 240 a second throughout), so
@@ -40,7 +34,7 @@ WallpaperItem {
     MatrixRain {
         anchors.fill: parent
         running: !root.covered
-        image: root.toUrl(root.configuration.Image)
+        image: root.configuration.Image
         cellHeight: root.configuration.CellHeight
         speed: root.configuration.Speed
         trailFloor: root.configuration.TrailFloor

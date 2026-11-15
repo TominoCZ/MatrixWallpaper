@@ -131,6 +131,33 @@ def check_it_fades_smoothly_for_years() -> None:
         assert smooth >= 30, f"at tick {start:g} only {smooth} of 40 columns change with every tenth of a row"
 
 
+def check_settings_page_covers_every_setting() -> None:
+    # Plasma hands the page a cfg_<Key> for each setting it declares and reads them back on
+    # Apply. Each must be there and survive the trip through its control (LogFrameRate has none).
+    keys = [e.get("name") for e in ElementTree.parse(rain.ROOT / "package/contents/config/main.xml").findall(".//{*}entry")]
+    values = {"Image": "/tmp/a picture #1.jpg", "CellHeight": 18, "Speed": 300, "TrailFloor": 0.4, "Lift": 0.6, "Glide": 0,
+              "LogFrameRate": True}
+    assert set(keys) == set(values), f"settings and test values differ: {sorted(set(keys) ^ set(values))}"
+    window = rain.load(rain.ROOT / "package/contents/ui/config.qml", 700, 600, {f"cfg_{k}": v for k, v in values.items()})
+    page = window.rootObject()
+    for key, value in values.items():
+        got = page.property(f"cfg_{key}")
+        assert got == value or (isinstance(value, float) and abs(got - value) < 1e-6), f"cfg_{key}: set {value!r}, page has {got!r}"
+
+
+def check_glyph_size_change_keeps_the_picture() -> None:
+    # A new glyph size means the picture is decoded again at the new grid. The frame right after
+    # the change must still show it (the old decode), not the green fallback while it reloads.
+    # A large picture, so that decoding it again takes longer than one frame, as a photo does.
+    window = rain.view(640, 360, rain.bands(TMP / "big-bands.png", (6000, 3000)), trailFloor=0.5, cellHeight=20)
+    root = window.rootObject()
+    for height in (21, 14, 30):
+        root.setProperty("cellHeight", height)
+        assert dominant(rain.grab(window, 200), QRect(0, 0, 150, 360), RED), f"the picture dropped out when the glyph size became {height}"
+        while not root.property("ready"):
+            rain.app.processEvents()
+
+
 def check_it_moves_and_repeats() -> None:
     window = rain.view(640, 360)
     first, moved, again = rain.grab(window, 100), rain.grab(window, 101), rain.grab(window, 100)

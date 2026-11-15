@@ -5,6 +5,7 @@ of it to an image: that is what the shots and the checks are built on. Run as a 
 the live preview: the rain in a window, coloured from the current wallpaper image.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -49,23 +50,32 @@ def bands(path: Path, size: tuple[int, int], vertical: bool = True, shade: int =
     painter.fillRect(image.rect(), QColor(0, 0, 0, shade))
     painter.end()
     path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(str(path))
+    # Swapped into place in one step: a view still loading the previous copy on Qt's image
+    # thread would otherwise read a half-written file ("Unsupported image format").
+    image.save(str(path) + ".tmp.png")
+    os.replace(str(path) + ".tmp.png", path)
     return path
 
 
 def view(width: int, height: int, image: str | Path | None = None, **props) -> QQuickView:
     """MatrixRain at this size, standing still (`running` off) unless asked otherwise."""
-    window = QQuickView()
-    window.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
-    window.resize(width, height)  # before the source: a hidden window gets no resize event
     props.setdefault("running", False)
     if image:
-        props["image"] = QUrl.fromLocalFile(str(image))
+        props["image"] = str(image)
+    return load(QML, width, height, props)
+
+
+def load(qml: Path, width: int, height: int, props: dict) -> QQuickView:
+    """Any QML file of the package in a hidden window, its root given these properties."""
+    window = QQuickView()
+    window.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
+    window.setColor(app.palette().window().color())  # what a dialog would show behind the page
+    window.resize(width, height)  # before the source: a hidden window gets no resize event
     window.setInitialProperties(props)
-    window.setSource(QUrl.fromLocalFile(str(QML)))
+    window.setSource(QUrl.fromLocalFile(str(qml)))
     if window.status() != QQuickView.Status.Ready:
         raise SystemExit("\n".join(error.toString() for error in window.errors()))
-    while not window.rootObject().property("ready"):  # the image is decoded on another thread
+    while window.rootObject().property("ready") is False:  # an image is decoded on another thread
         app.processEvents()
     return window
 

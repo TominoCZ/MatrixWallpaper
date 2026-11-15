@@ -6,7 +6,7 @@ import QtQuick
 Item {
     id: root
 
-    property url image                      // empty: classic green
+    property string image                   // a file path or a URL; empty: classic green
     property int cellHeight: 16
     property real speed: 480                // pixels per second for the fastest drops; the slowest do a third
     property real trailFloor: 0.25          // 0: trails fade to black; above: every glyph stays this bright
@@ -16,6 +16,7 @@ Item {
     property real lift: 0.5                 // 0: the image's own brightness; 1: full brightness in each cell's hue
     property real glide: 1                  // 0: glyphs light up whole; 1: the light slides through them
     property bool logFrameRate: false       // write the measured frame rate to the log every 2 s
+    property string logName: "MatrixWallpaper"  // how its log lines start; ./run.sh perf reads "MatrixWallpaper:"
     property bool running: true
     property real tick: 0                   // the rain's clock, in rows fallen by the fastest drops
     property real frames: 0                 // frames shown since the start, for measuring the frame rate
@@ -26,8 +27,13 @@ Item {
     readonly property int columns: Math.max(1, Math.round(width / cellWidth))
     readonly property int rows: Math.max(1, Math.round(height / cellHeight))
     readonly property var glyphList: Array.from(glyphs)
-    // False while the image is still being decoded; the checks wait for it before grabbing.
-    readonly property bool ready: width > 0 && colours.status !== Image.Loading
+    readonly property bool showsImage: colours.status === Image.Ready  // false: the green fallback
+    // False until the picture at the current size is decoded (or failed) and handed over; the
+    // checks wait for it before grabbing. Not "status is not Loading": right after the size is
+    // known the source is set but its status has not yet moved from Null.
+    readonly property bool ready: width > 0 && (image === ""
+        || (colours.status === Image.Ready || colours.status === Image.Error)
+           && colours.sourceSize.width === decoding.sourceSize.width && colours.sourceSize.height === decoding.sourceSize.height)
 
     // PreserveAspectCrop is done in the shader. `shown` is the part of the image this screen
     // shows: all of one axis, the middle of the other.
@@ -73,12 +79,19 @@ Item {
         repeat: true
         running: root.logFrameRate
         onTriggered: {
-            console.warn("MatrixWallpaper:", (root.frames - root.loggedAt) / 2, "frames/s,", root.lateFrames / 2,
-                         "late/s, worst gap", root.worstGap, "ms, frame time", root.frameTime.toFixed(2), "ms");
+            console.warn(root.logName + ":", (root.frames - root.loggedAt) / 2, "frames/s,", root.lateFrames / 2,
+                         "late/s, worst gap", root.worstGap, "ms, frame time", root.frameTime.toFixed(2), "ms,",
+                         root.Window.window ? "in a window" : "no window", root.running ? "" : "(stopped)");
             root.loggedAt = root.frames;
             root.lateFrames = 0;
             root.worstGap = 0;
         }
+    }
+
+    // A path as Plasma's image wallpaper stores it; "#", "?" or "%" in a file name would otherwise
+    // be read as parts of a URL.
+    function toUrl(path) {
+        return path.startsWith("/") ? "file://" + path.split("/").map(encodeURIComponent).join("/") : path;
     }
 
     // The chain stops when the tick stops changing (clock off, or speed 0), and then nothing is
@@ -87,15 +100,28 @@ Item {
     onRunningChanged: kick()
     onSpeedChanged: kick()
 
-    // Decoded once, on Qt's image thread, down to about one texel per cell: the shader's
-    // single lookup per pixel then already is that cell's average colour.
+    // The picture, decoded on Qt's image thread down to about one texel per cell: the shader's
+    // single lookup per pixel then already is that cell's average colour. A new picture or size
+    // (another glyph size, another screen) is decoded here first...
     Image {
-        id: colours
+        id: decoding
         visible: false
         asynchronous: true
         fillMode: Image.PreserveAspectCrop  // tells the loader how to read sourceSize
         sourceSize: Qt.size(root.columns, root.rows)
-        source: root.width > 0 ? root.image : ""  // not before the size is known: that would decode it in full
+        source: root.width > 0 ? root.toUrl(root.image) : ""  // not before the size is known: that would decode it in full
+        onStatusChanged: if (status !== Image.Loading) {
+            colours.sourceSize = sourceSize;
+            colours.source = source;
+        }
+    }
+    // ...and handed to the one the shader draws from only once it is done, which then takes it
+    // straight from Qt's image cache. Reloading in place emptied the texture for a few frames on
+    // every change: the rain flashed green each time the glyph size was stepped.
+    Image {
+        id: colours
+        visible: false
+        fillMode: Image.PreserveAspectCrop
     }
 
     // The glyphs, drawn once into one row of cells and kept as a texture.
@@ -132,7 +158,7 @@ Item {
         readonly property real trailFloor: root.trailFloor
         readonly property real lift: root.lift
         readonly property real glide: root.glide
-        readonly property real hasImage: colours.status === Image.Ready ? 1 : 0
+        readonly property real hasImage: root.showsImage ? 1 : 0
         readonly property size grid: Qt.size(root.columns, root.rows)
         // cell position as a fraction of the grid -> image uv: xy scale, zw offset
         readonly property vector4d crop: Qt.vector4d(
