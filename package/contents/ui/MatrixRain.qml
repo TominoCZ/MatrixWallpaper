@@ -10,11 +10,16 @@ Item {
     property int cellHeight: 16
     property real speed: 480                // pixels per second for the fastest drops; the slowest do a third
     property real trailFloor: 0.25          // 0: trails fade to black; above: every glyph stays this bright
-    property string glyphs: "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789:.=*+-<>|"
+    property string glyphs: "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789:.=*+-<>"  // no "|": in this font it reaches past the cell and was cut off
     property string fontFamily: "monospace"
     property color fallback: "#00ff41"
     property real lift: 0.5                 // 0: the image's own brightness; 1: full brightness in each cell's hue
     property real glide: 1                  // 0: glyphs light up whole; 1: the light slides through them
+    property int drops: 2                   // drops per column, 1 to 4
+    property real trailLength: 1            // trail lengths scaled by this
+    property real trailCurve: 1             // 1: trails fade evenly; more: quickly after the head
+    property real glow: 0                   // halo around each head, 0 for none
+    property real glowSize: 0.8             // its radius in glyph heights (at most what two columns cover)
     property bool logFrameRate: false       // write the measured frame rate to the log every 2 s
     property string logName: "MatrixWallpaper"  // how its log lines start; ./run.sh perf reads "MatrixWallpaper:"
     property bool running: true
@@ -158,6 +163,12 @@ Item {
         readonly property real trailFloor: root.trailFloor
         readonly property real lift: root.lift
         readonly property real glide: root.glide
+        readonly property real dropCount: Math.max(1, Math.min(4, root.drops))
+        readonly property real trailLength: root.trailLength
+        readonly property real trailCurve: root.trailCurve
+        readonly property real glow: root.glow
+        readonly property real glowSize: Math.max(0.05, root.glowSize)
+        readonly property real cellAspect: (root.width / root.columns) / (root.height / root.rows)
         readonly property real hasImage: root.showsImage ? 1 : 0
         readonly property size grid: Qt.size(root.columns, root.rows)
         // cell position as a fraction of the grid -> image uv: xy scale, zw offset

@@ -136,7 +136,7 @@ def check_settings_page_covers_every_setting() -> None:
     # Apply. Each must be there and survive the trip through its control (LogFrameRate has none).
     keys = [e.get("name") for e in ElementTree.parse(rain.ROOT / "package/contents/config/main.xml").findall(".//{*}entry")]
     values = {"Image": "/tmp/a picture #1.jpg", "CellHeight": 18, "Speed": 300, "TrailFloor": 0.4, "Lift": 0.6, "Glide": 0,
-              "LogFrameRate": True}
+              "LogFrameRate": True, "Drops": 3, "TrailLength": 1.5, "TrailCurve": 2.0, "Glow": 0.5, "GlowSize": 1.0}
     assert set(keys) == set(values), f"settings and test values differ: {sorted(set(keys) ^ set(values))}"
     window = rain.load(rain.ROOT / "package/contents/ui/config.qml", 700, 600, {f"cfg_{k}": v for k, v in values.items()})
     page = window.rootObject()
@@ -156,6 +156,29 @@ def check_glyph_size_change_keeps_the_picture() -> None:
         assert dominant(rain.grab(window, 200), QRect(0, 0, 150, 360), RED), f"the picture dropped out when the glyph size became {height}"
         while not root.property("ready"):
             rain.app.processEvents()
+
+
+def brightness(frame) -> float:
+    return sum(rain.mean_rgb(frame, QRect(0, 0, frame.width(), frame.height())))
+
+
+def check_tuning_knobs_do_what_they_say() -> None:
+    # Each knob against its own opposite, on the same frame of the green rain with no trail floor.
+    window = rain.view(640, 360, trailFloor=0, cellHeight=20)
+    root = window.rootObject()
+
+    def light(**props) -> float:
+        for key, value in props.items():
+            root.setProperty(key, value)
+        frame = rain.grab(window, 200)
+        for key in props:  # back to the defaults for the next measurement
+            root.setProperty(key, {"glow": 0, "drops": 2, "trailLength": 1, "trailCurve": 1}[key])
+        return brightness(frame)
+
+    assert light(glow=1) > 1.3 * light(glow=0), "head glow does not add light"
+    assert light(drops=4) > 1.5 * light(drops=1), "more drops per column do not light more"
+    assert light(trailLength=2) > 1.5 * light(trailLength=0.5), "longer trails do not light more"
+    assert light(trailCurve=3) < 0.7 * light(trailCurve=0.5), "a quick trail fade is not darker than an even one"
 
 
 def check_it_moves_and_repeats() -> None:

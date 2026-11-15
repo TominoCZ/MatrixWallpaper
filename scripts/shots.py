@@ -49,7 +49,16 @@ SHOTS = {
     "lift-none": lambda: ((1280, 720), dark_fixture(), {"lift": 0}),
     "lift-half": lambda: ((1280, 720), dark_fixture(), {"lift": 0.5}),
     "lift-full": lambda: ((1280, 720), dark_fixture(), {"lift": 1}),
+    "tune-glow": lambda: ((1280, 720), fixture(), {"cellHeight": 32, "glow": 1, "_maxLit": 0.5}),
+    "tune-glow-small": lambda: ((1280, 720), fixture(), {"glow": 0.7, "glowSize": 0.5, "_maxLit": 0.5}),
+    "tune-glow-big": lambda: ((1280, 720), fixture(), {"cellHeight": 32, "glow": 0.7, "glowSize": 1.5, "_maxLit": 0.6}),
+    "tune-drops-1": lambda: ((1280, 720), fixture(), {"drops": 1, "trailFloor": 0}),
+    "tune-drops-4": lambda: ((1280, 720), fixture(), {"drops": 4, "trailFloor": 0}),
+    "tune-trail-short": lambda: ((1280, 720), fixture(), {"trailLength": 0.4, "trailFloor": 0}),
+    "tune-trail-quick": lambda: ((1280, 720), fixture(), {"trailCurve": 3, "trailFloor": 0}),
+    "tune-trail-bright": lambda: ((1280, 720), fixture(), {"trailCurve": 0.4, "trailFloor": 0}),
     "photo": lambda: (screen_size(), rain.current_wallpaper() or "", {}),
+    "photo-glow": lambda: (screen_size(), rain.current_wallpaper() or "", {"glow": 0.6, "_maxLit": 0.5}),
     "photo-lift-none": lambda: (screen_size(), rain.current_wallpaper() or "", {"lift": 0}),
     "photo-lift-most": lambda: (screen_size(), rain.current_wallpaper() or "", {"lift": 0.75}),
     "photo-lift-full": lambda: (screen_size(), rain.current_wallpaper() or "", {"lift": 1}),
@@ -59,11 +68,12 @@ SHOTS = {
 
 # The settings page as Plasma's dialog would show it: name -> (window size, cfg_ properties).
 CONFIG = rain.ROOT / "package/contents/ui/config.qml"
-DEFAULTS = {"cfg_CellHeight": 16, "cfg_Speed": 480, "cfg_TrailFloor": 0.25, "cfg_Lift": 0.5, "cfg_Glide": 1}
+DEFAULTS = {"cfg_CellHeight": 16, "cfg_Speed": 480, "cfg_TrailFloor": 0.25, "cfg_Lift": 0.5, "cfg_Glide": 1,
+            "cfg_Drops": 2, "cfg_TrailLength": 1, "cfg_TrailCurve": 1, "cfg_Glow": 0, "cfg_GlowSize": 0.8}
 PAGES = {
-    "settings": lambda: ((760, 720), {**DEFAULTS, "cfg_Image": str(fixture())}),
-    "settings-green": lambda: ((760, 720), {**DEFAULTS, "cfg_Image": "", "cfg_Glide": 0, "cfg_CellHeight": 24}),
-    "settings-narrow": lambda: ((520, 900), {**DEFAULTS, "cfg_Image": str(fixture())}),
+    "settings": lambda: ((760, 1000), {**DEFAULTS, "cfg_Image": str(fixture())}),
+    "settings-green": lambda: ((760, 1000), {**DEFAULTS, "cfg_Image": "", "cfg_Glide": 0, "cfg_CellHeight": 24, "cfg_Glow": 0.6}),
+    "settings-narrow": lambda: ((520, 1250), {**DEFAULTS, "cfg_Image": str(fixture())}),
 }
 
 
@@ -74,14 +84,14 @@ def lit_fraction(frame: QImage) -> float:
     return max(data[c::4].translate(LIT).count(1) for c in range(3)) / (frame.width() * frame.height())
 
 
-def audit(frame: QImage, size: tuple[int, int], warnings: list[str]) -> list[str]:
+def audit(frame: QImage, size: tuple[int, int], warnings: list[str], max_lit: float = 0.15) -> list[str]:
     faults = [f"Qt warned: {text}" for text in warnings]
     if (frame.width(), frame.height()) != size:
         faults.append(f"frame is {frame.width()}x{frame.height()}, asked for {size[0]}x{size[1]}")
     lit = lit_fraction(frame)
     if lit < 0.003:
         faults.append(f"almost nothing drawn ({lit:.2%} of the pixels lit)")
-    if lit > 0.15:  # glyph strokes light at most 10% of a frame, even with every cell lit; whole cells, 21% and up
+    if lit > max_lit:  # glyph strokes light at most 10% of a frame, even with every cell lit; whole cells, 21% and up
         faults.append(f"flooded ({lit:.0%} of the pixels lit): the glyph mask is not applied")
     return faults
 
@@ -129,10 +139,11 @@ def render(name: str) -> tuple[QImage | None, list[str]]:
     size, image, props = SHOTS[name]()
     if image == "" or (image and not Path(image).exists()):
         return None, []
+    max_lit = props.pop("_maxLit", 0.15)  # a glow lights the gaps between glyphs too
     seen = len(rain.messages)
     frame = rain.grab(rain.view(*size, image, **props), TICK)
     frame.save(str(OUT / f"{name}.png"))
-    return frame, audit(frame, size, rain.messages[seen:])
+    return frame, audit(frame, size, rain.messages[seen:], max_lit)
 
 
 def sheet(frames: dict[str, QImage], path: Path) -> None:

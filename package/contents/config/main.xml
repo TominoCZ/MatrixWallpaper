@@ -36,6 +36,36 @@
       <min>0</min>
       <max>1</max>
     </entry>
+    <entry name="Drops" type="Int">
+      <label>Drops falling in each column at once, 1 to 4.</label>
+      <default>2</default>
+      <min>1</min>
+      <max>4</max>
+    </entry>
+    <entry name="TrailLength" type="Double">
+      <label>Trail lengths are scaled by this. 1: from 8 rows up to 70 % of the screen's height.</label>
+      <default>1</default>
+      <min>0.25</min>
+      <max>2</max>
+    </entry>
+    <entry name="TrailCurve" type="Double">
+      <label>How a trail fades from the head. 1: evenly; more: quickly after the head, with a long dim tail; less: stays bright, then drops at the end.</label>
+      <default>1</default>
+      <min>0.25</min>
+      <max>4</max>
+    </entry>
+    <entry name="Glow" type="Double">
+      <label>Brightness of the soft halo around each drop's head, 0 to 1. 0: no halo.</label>
+      <default>0</default>
+      <min>0</min>
+      <max>1</max>
+    </entry>
+    <entry name="GlowSize" type="Double">
+      <label>Radius of the halo, in glyph heights.</label>
+      <default>0.8</default>
+      <min>0.2</min>
+      <max>1.5</max>
+    </entry>
     <entry name="LogFrameRate" type="Bool">
       <label>Write the measured frame rate to plasmashell's log every two seconds. For ./run.sh perf.</label>
       <default>false</default>

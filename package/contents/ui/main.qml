@@ -40,6 +40,11 @@ WallpaperItem {
         trailFloor: root.configuration.TrailFloor
         lift: root.configuration.Lift
         glide: root.configuration.Glide
+        drops: root.configuration.Drops
+        trailLength: root.configuration.TrailLength
+        trailCurve: root.configuration.TrailCurve
+        glow: root.configuration.Glow
+        glowSize: root.configuration.GlowSize
         logFrameRate: root.configuration.LogFrameRate
     }
 }
