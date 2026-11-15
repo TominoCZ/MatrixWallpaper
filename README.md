@@ -80,14 +80,14 @@ effect at once:
 | Key | What it does | Default |
 |---|---|---|
 | `Image` | The picture the rain takes its colours from: the full path of an image file. Empty gives classic green. | the picture `apply` found |
-| `CellHeight` | Height of a glyph cell in pixels. Smaller cells give a finer picture; below about 14 the glyphs get thin and dim. | `16` |
-| `Speed` | Pixels per second for the fastest drops; the slowest fall at a third of it. `0` stops the rain, and with it everything it costs. | `480` |
-| `TrailFloor` | How dark a glyph may get, 0 to 1. `0` lets trails fade to black, as in the film; higher keeps more of the picture on screen. | `0.25` |
+| `CellHeight` | Height of a glyph cell in pixels. Smaller cells give a finer picture; below about 14 the glyphs get thin and dim. | `20` |
+| `Speed` | Pixels per second for the fastest drops; the slowest fall at a third of it. `0` stops the rain, and with it everything it costs. | `400` |
+| `TrailFloor` | How dark a glyph may get, 0 to 1. `0` lets trails fade to black, as in the film; higher keeps more of the picture on screen. | `0.1` |
 | `Lift` | Brightens dark pictures, 0 to 1. `0` leaves each glyph as dark as the picture is there; `1` gives every glyph full brightness in its own colour. | `0.5` |
 | `Glide` | Motion. `0`: steps, each glyph lights up as a whole, cell by cell. `1`: the light moves smoothly over the glyphs, everything stays on the grid. `2`: smooth falling heads, the white head is a glyph of its own falling smoothly, showing the character of the cell it passes; the smoothest to follow with the eye. | `2` |
-| `Glow` | A soft halo around each drop's head, in its colour, spilling into the gaps between glyphs, 0 to 1. `0`: none. Costs GPU time (below). | `0` |
-| `GlowSize` | The halo's radius, in glyph heights, 0.2 to 1.5. | `0.8` |
-| `Drops` | Drops falling in each column at once, 1 to 4. | `2` |
+| `Glow` | A soft halo around each drop's head, in its colour, spilling into the gaps between glyphs, 0 to 1. `0`: none. Costs GPU time (below). | `0.1` |
+| `GlowSize` | The halo's radius, in glyph heights, 0.2 to 1.5. | `1` |
+| `Drops` | Drops falling in each column at once, 1 to 4. | `1` |
 | `TrailLength` | Trail lengths scaled by this, 0.25 to 2. Faster drops always leave longer trails, as light fading on a screen would. | `1` |
 | `TrailCurve` | How a trail fades from its head: `1` evenly, more quickly after the head (up to 4), less stays bright and drops at the end (down to 0.25). | `1` |
 

@@ -93,6 +93,7 @@ the screen (as "scaled and cropped" does) is two numbers passed to the shader.
 | `package/contents/ui/main.qml` | What Plasma loads: a `WallpaperItem` that hands the settings to `MatrixRain` and pauses it while a fullscreen window has the focus (§4.16). |
 | `package/contents/ui/config.qml` | The settings page in Plasma's desktop dialog: picture, glyph size, speed, trail floor, lift, glide, and a live preview that is `MatrixRain` itself (§4.17). |
 | `package/contents/ui/MatrixRain.qml` | The effect: frame clock, image texture, glyph texture, the shader's inputs. Plain QtQuick, no KDE imports. |
+| `package/contents/shaders/drops.frag` | Every column's drops (head position, trail length), once per frame, into a float layer the rain shader reads. |
 | `package/contents/shaders/rain.frag` | The rain. `rain.frag.qsb` is its baked form, the file Qt loads; both are in the repository. |
 | `scripts/rain.py` | Loads `MatrixRain.qml` outside Plasma: hidden window + `grab(tick)` for shots and checks; run directly, the live preview. |
 | `scripts/shots.py` | Renders the named states of the rain and of the settings page to `.dev/shots/` and audits each frame. |
@@ -444,11 +445,16 @@ it before Apply; the defaults keep the look as it was (glow off):
 
 The clipped "|" (it reached past its cell in this font) is no longer among the glyphs.
 
-The glow is the costly part: each pixel works out ten drops instead of two. On the owner's
-screen (5120×1440, 240 fps) plasmashell's GPU share went from 30–38 % to 43–45 % and board power
-by up to 30 W, measured by switching it on and off three times. The planned fix: render each
-column's drop positions once per frame into a small floating-point texture and let every pixel
-look them up.
+The glow was the costly part: each pixel worked out the drops of five columns, up to 20 with
+4 drops. On the owner's screen (5120×1440, 240 fps) plasmashell's GPU share went from 30–38 % to
+43–45 % with 2 drops and to about 50 % with 4. Fixed (2026-11-15): `drops.frag` renders every
+column's drops (head position, trail length) once per frame into a small 32-bit float layer, one
+texel per column (plus two either side, for the glow past the edges) and drop, and the rain shader
+looks them up. Frames are pixel-identical to before at every moment tested (up to 10⁸ rows), in
+all three motion modes. Measured as GPU time added per frame at 5120×1440 (median grab time,
+readback subtracted out): 10 % glow with 2 drops +1.5–1.8 ms before, +0.4–0.7 ms after; with 4
+drops +2.5–2.9 ms before, +0.1–0.9 ms after; the table pass itself costs 0.3–0.4 ms. A 16-bit
+float layer was tried and lost the positions' fractions above 256 rows.
 
 ### 4.19 Motion for an eye that follows a drop
 
@@ -497,6 +503,17 @@ guards the order.
 A glyph never repeats the one above it: even rows draw from the glyphs at even places in the
 set, odd rows from the odd ones, so the falling head always visibly changes and no trail shows
 the same character twice in a row. Two rows apart a repeat is still possible (about 1 in 28).
+
+### 4.20 The defaults are the owner's tuned values
+
+On 2026-11-15 the owner's settings became the defaults ("I think my current settings are good for a
+default"), updated once more after the drop table: glyphs 20 px, speed 400 px/s, picture between drops
+0.1, head glow 0.1 at size 1, 1 drop per column, even trail fade, falling heads; lift and trail
+length unchanged. Cost: with glow
+and 4 drops plasmashell had taken about 50 % of an RTX 3080 Ti at 5120×1440 and 240 fps; the
+per-column drop table (§4.18) brought the glow down to a fraction of that.
+Checks that measure one effect now pin the conditions they were written for (no glow, two drops,
+even fade) instead of inheriting the defaults; four of them had silently depended on the old ones.
 
 ## 5. The look
 
