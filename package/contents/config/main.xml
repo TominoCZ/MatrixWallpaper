@@ -32,7 +32,7 @@
     </entry>
     <entry name="Glide" type="Double">
       <label>How the rain moves. 0: each glyph lights up as a whole, cell by cell. 1: the light moves smoothly over the glyphs. 2: the head falls smoothly as a glyph of its own (smoothest, the head leaves the grid).</label>
-      <default>1</default>
+      <default>2</default>
       <min>0</min>
       <max>2</max>
     </entry>
@@ -43,7 +43,7 @@
       <max>4</max>
     </entry>
     <entry name="TrailLength" type="Double">
-      <label>Trail lengths are scaled by this. 1: from 8 rows up to 70 % of the screen's height.</label>
+      <label>Trail lengths are scaled by this. 1: from 8 rows up to 70 % of the screen's height on average; faster drops leave longer trails.</label>
       <default>1</default>
       <min>0.25</min>
       <max>2</max>

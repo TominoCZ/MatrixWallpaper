@@ -210,6 +210,44 @@ def head_unevenness(**props) -> float:
     return steps.std() / abs(steps.mean())
 
 
+def check_look_alike_heads_never_neighbours() -> None:
+    # Measured look-alike katakana (16 to 30 px). Neighbouring rows draw from places of different
+    # parity, so each group must sit at places of one parity, or a falling head can morph into a
+    # glyph that looks the same and seem to freeze. Signs and look-alike digits must never be heads.
+    window = rain.view(64, 64)
+    root = window.rootObject()
+    order = root.property("glyphs")
+    for group in ("ｦｳｵｻｿﾂﾃﾅﾎﾗﾘﾜ", "ｴｺﾆﾕ", "ｱｽﾇ", "ｾﾔ", "27"):
+        parities = {order.index(g) % 2 for g in group}
+        assert len(parities) == 1, f"look-alikes {group} are split between the two halves"
+    heads = order[: int(root.property("headCount"))]
+    assert not any(g in heads for g in "035689:.=*+-<>"), "a look-alike digit or a sign can be a falling head"
+    assert all(g in heads for g in "1247"), "the distinct digits 1 2 4 7 should be heads too"
+
+
+def check_falling_heads_never_shrink_to_a_dot() -> None:
+    # Glyphs "0", "1" and ".": a falling head passing a "." cell must show a tall glyph instead,
+    # or it looks as if it vanished. Tracked: the white (the head; its trail is coloured) in each
+    # column with a head, frame by frame; its least over half a second against its typical.
+    import numpy as np
+
+    window = rain.view(640, 360, trailFloor=0, cellHeight=24, glide=2, glyphs="01.", notHeads=".", drops=1)
+    root = window.rootObject()
+    width, step = 640 / root.property("columns"), 400 / 24 / 240
+
+    def white(tick):
+        frame = rain.grab(window, tick).convertToFormat(QImage.Format.Format_RGBX8888)
+        return np.frombuffer(frame.constBits().asstring(frame.sizeInBytes()), np.uint8).reshape(360, 640, 4)[:, :, :3].min(axis=2) / 255
+
+    first = white(200)
+    columns = [c for c in range(root.property("columns"))
+               if 0.2 * 360 < first[:, int(c * width):int((c + 1) * width)].max(axis=1).argmax() < 0.6 * 360][:6]
+    masses = np.array([[white(200 + f * step)[:, int(c * width):int((c + 1) * width)].sum() for c in columns]
+                       for f in range(0, 120, 4)])
+    worst = (masses.min(axis=0) / np.median(masses, axis=0)).min()
+    assert worst > 0.5, f"a falling head shrank to {worst:.0%} of its usual white: it showed a short glyph"
+
+
 def check_falling_heads_move_evenly() -> None:
     # Motion 2 exists for an eye following a drop: its head must move by the same amount every
     # frame. With the head on the grid (motion 0) it moves in steps, which this must tell apart.
@@ -229,6 +267,40 @@ def check_no_glyph_repeats_its_neighbour_above() -> None:
         cells = green[:360, :636].reshape(18, 20, 53, 12)  # 18 rows x 53 columns of 12 x 20 px
         same = int((cells[1:] == cells[:-1]).all(axis=(1, 3)).sum())
         assert same == 0, f"{same} glyphs repeat the one above them at tick {tick}"
+
+
+def check_faster_drops_leave_longer_trails() -> None:
+    # Like light fading on a screen: a glyph fades over time once the head has passed, so a drop
+    # that falls faster leaves a longer trail. Per column: the head's speed from two frames a tick
+    # apart, and how many cells above it are lit; the two must rise together.
+    import numpy as np
+
+    # Tall, with trails at half length, so that most trails end on screen and can be measured.
+    window = rain.view(640, 1440, trailFloor=0, cellHeight=20, glide=0, drops=1, trailCurve=1, trailLength=0.5)
+    columns, rows = window.rootObject().property("columns"), window.rootObject().property("rows")
+
+    def cells(tick):
+        frame = rain.grab(window, tick).convertToFormat(QImage.Format.Format_RGBX8888)
+        a = np.frombuffer(frame.constBits().asstring(frame.sizeInBytes()), np.uint8).reshape(1440, 640, 4)
+        a = a[: rows * 20, : columns * 12].reshape(rows, 20, columns, 12, 4).astype(float)
+        return a[..., :3].min(axis=-1).max(axis=(1, 3)), a[..., 1].max(axis=(1, 3))  # whiteness, green
+
+    speeds, lengths = [], []
+    for start in (100, 300, 500, 700, 900, 1100):
+        white0, green = cells(start)
+        white1, _ = cells(start + 6)
+        for c in range(columns):
+            h0, h1 = white0[:, c].argmax(), white1[:, c].argmax()
+            if white0[h0, c] < 100 or white1[h1, c] < 100 or not 0 < h1 - h0 <= 6 or h0 > rows - 7:
+                continue  # no head here, or it left the screen
+            lit = 0
+            while h0 - lit - 1 >= 0 and green[h0 - lit - 1, c] > 30:
+                lit += 1
+            if h0 - lit - 1 >= 0:  # the trail's end is on screen
+                speeds.append((h1 - h0) / 6)
+                lengths.append(lit)
+    r = np.corrcoef(speeds, lengths)[0, 1]
+    assert len(speeds) >= 15 and r > 0.4, f"faster drops do not leave longer trails (correlation {r:+.2f} over {len(speeds)} drops)"
 
 
 def check_it_moves_and_repeats() -> None:

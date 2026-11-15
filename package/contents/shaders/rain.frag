@@ -13,6 +13,7 @@ layout(std140, binding = 0) uniform buf {
     float tickHigh;    // the rain's clock, rows fallen by the fastest drops: whole 128s of rows
     float tickLow;     // and the rest, 0 to 128 rows with the fraction (see elapsed())
     float glyphCount;  // glyphs in the atlas, side by side in one row
+    float headCount;   // the first this many may be a falling head (the rest: digits and signs)
     float hasImage;    // 0: no image, use `fallback`
     float trailFloor;  // a cell never gets darker than this, so the image stays readable in the glyphs
     float lift;        // 0: the image's own brightness; 1: every cell at full brightness in its own hue
@@ -55,9 +56,13 @@ float elapsed(float m) {
 // Speed, length and the gap before it comes round again are fixed per column and seed. The
 // speed is a whole number of 32nds of a row per tick, so the drop's place repeats exactly every
 // 32 periods of the clock.
+// The trail's length follows the speed, as if each glyph faded over time once the head had
+// passed: a faster drop leaves a longer trail (the fastest about 1.5 times the drawn length, the
+// slowest about half; on average as before). Drawn independently, a fast drop with a short tail
+// looked wrong.
 vec4 dropShape(float col, float seed) {  // speed, trail length, period, start
     float speed = floor(mix(10.0, 33.0, hash(vec2(col, seed)))) / 32.0;  // 0.31 to 1 row per tick
-    float len = max(2.0, floor(mix(8.0, 0.7 * grid.y, hash(vec2(col, seed + 1.0))) * trailLength));
+    float len = max(2.0, floor(mix(8.0, 0.7 * grid.y, hash(vec2(col, seed + 1.0))) * trailLength * speed * 1.5));
     float period = floor(grid.y + len + grid.y * hash(vec2(col, seed + 2.0)));
     return vec4(speed, len, period, floor(period * hash(vec2(col, seed + 3.0))));
 }
@@ -76,6 +81,17 @@ float cellGlyph(vec2 cell) {
     float parity = glyphCount > 1.0 ? mod(cell.y, 2.0) : 0.0;  // a set of one glyph has to repeat
     float choices = floor((glyphCount - parity + 1.0) / 2.0);  // glyphs at this row's places
     return parity + 2.0 * floor(choices * hash(cell + epoch * vec2(7.0, 3.0)));
+}
+
+// The glyph a falling head shows for a cell: the cell's own, unless that may not be a head (a
+// digit or a sign, see MatrixRain.notHeads); then a stand-in, its own per cell, from the same
+// half of the set, so the head still never repeats or resembles the cell above's.
+float headGlyph(vec2 cell) {
+    float g = cellGlyph(cell);
+    if (g < headCount) return g;
+    float parity = mod(g, 2.0);
+    float choices = floor((headCount - parity + 1.0) / 2.0);  // head glyphs at this row's places
+    return choices < 1.0 ? g : parity + 2.0 * floor(choices * hash(cell + vec2(3.1, 1.7)));
 }
 
 // Ink of glyph g at (x, y) within a cell, y in rows from its top, read between two texel rows
@@ -150,8 +166,8 @@ void main() {
                     float f = smoothstep(headFade, 1.0 - headFade, top - upper);
                     float y = 1.0 - (drop.x - 1.0 - row);  // within the head glyph, rows from its top
                     float x = at.x - cell.x;
-                    float ink2 = mix(inkBetween(cellGlyph(vec2(cell.x, upper)), x, y),
-                                     inkBetween(cellGlyph(vec2(cell.x, upper + 1.0)), x, y), f);
+                    float ink2 = mix(inkBetween(headGlyph(vec2(cell.x, upper)), x, y),
+                                     inkBetween(headGlyph(vec2(cell.x, upper + 1.0)), x, y), f);
                     headInk = max(headInk, lit.y * ink2);
                 }
             }

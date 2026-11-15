@@ -10,11 +10,16 @@ Item {
     property int cellHeight: 16
     property real speed: 480                // pixels per second for the fastest drops; the slowest do a third
     property real trailFloor: 0.25          // 0: trails fade to black; above: every glyph stays this bright
-    property string glyphs: "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789:.=*+-<>"  // no "|": in this font it reaches past the cell and was cut off
+    // The glyphs that may be falling heads first (katakana and the digits 2 1 7 4), in an order that
+    // keeps look-alikes at places of the same parity (measured at 16 to 30 px: ｦｳｵｻｿﾂﾃﾅﾎﾗﾘﾜ, ｴｺﾆﾕ,
+    // ｱｽﾇ, ｾﾔ, 27): neighbouring rows draw from places of different parity, so a falling head never
+    // morphs into a glyph that looks like the one it was. No "|": in this font it reaches past the
+    // cell and was cut off.
+    property string glyphs: "ｦｴｳｺｵﾆｻﾕｿｱﾂｽﾃﾇﾅｾﾎﾔﾗｶﾘｷﾜｹｼﾀﾈﾊﾋﾏﾐﾑﾒﾓ2174035689:.=*+-<>"
     property string fontFamily: "monospace"
     property color fallback: "#00ff41"
     property real lift: 0.5                 // 0: the image's own brightness; 1: full brightness in each cell's hue
-    property real glide: 1                  // motion: 0 steps; 1 smooth light on the grid; 2 the head falls as its own glyph
+    property real glide: 2                  // motion: 0 steps; 1 smooth light on the grid; 2 the head falls as its own glyph
     property int drops: 2                   // drops per column, 1 to 4
     property real trailLength: 1            // trail lengths scaled by this
     property real trailCurve: 1             // 1: trails fade evenly; more: quickly after the head
@@ -33,7 +38,13 @@ Item {
     // edge. A cell is then up to half a pixel off its nominal size in total across the screen.
     readonly property int columns: Math.max(1, Math.round(width / cellWidth))
     readonly property int rows: Math.max(1, Math.round(height / cellHeight))
-    readonly property var glyphList: Array.from(glyphs)
+    // Never a falling head: signs are too short (the head looked as if it vanished), and these
+    // digits look alike (0 9, 3 8, 5 6), so a head morphing between them looked frozen.
+    property string notHeads: "035689:.=*+-<>"
+    // Glyphs that may be heads first, so the shader knows the others by their place (headCount and on).
+    readonly property var glyphList: Array.from(glyphs).filter(g => !notHeads.includes(g))
+                                         .concat(Array.from(glyphs).filter(g => notHeads.includes(g)))
+    readonly property int headCount: Array.from(glyphs).filter(g => !notHeads.includes(g)).length
     readonly property bool showsImage: colours.status === Image.Ready  // false: the green fallback
     // False until the picture at the current size is decoded (or failed) and handed over; the
     // checks wait for it before grabbing. Not "status is not Loading": right after the size is
@@ -162,6 +173,7 @@ Item {
         readonly property real tickHigh: Math.floor(root.tick / 128)
         readonly property real tickLow: root.tick - tickHigh * 128
         readonly property real glyphCount: root.glyphList.length
+        readonly property real headCount: root.headCount
         readonly property real trailFloor: root.trailFloor
         readonly property real lift: root.lift
         readonly property real glide: root.glide
