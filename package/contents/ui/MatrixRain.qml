@@ -7,9 +7,9 @@ Item {
     id: root
 
     property string image                   // a file path or a URL; empty: classic green
-    property int cellHeight: 16
-    property real speed: 480                // pixels per second for the fastest drops; the slowest do a third
-    property real trailFloor: 0.25          // 0: trails fade to black; above: every glyph stays this bright
+    property int cellHeight: 20
+    property real speed: 400                // pixels per second for the fastest drops; the slowest do a third
+    property real trailFloor: 0.1          // 0: trails fade to black; above: every glyph stays this bright
     // The glyphs that may be falling heads first (katakana and the digits 2 1 7 4), in an order that
     // keeps look-alikes at places of the same parity (measured at 16 to 30 px: ｦｳｵｻｿﾂﾃﾅﾎﾗﾘﾜ, ｴｺﾆﾕ,
     // ｱｽﾇ, ｾﾔ, 27): neighbouring rows draw from places of different parity, so a falling head never
@@ -20,11 +20,11 @@ Item {
     property color fallback: "#00ff41"
     property real lift: 0.5                 // 0: the image's own brightness; 1: full brightness in each cell's hue
     property real glide: 2                  // motion: 0 steps; 1 smooth light on the grid; 2 the head falls as its own glyph
-    property int drops: 2                   // drops per column, 1 to 4
+    property int drops: 1                   // drops per column, 1 to 4
     property real trailLength: 1            // trail lengths scaled by this
     property real trailCurve: 1             // 1: trails fade evenly; more: quickly after the head
-    property real glow: 0                   // halo around each head, 0 for none
-    property real glowSize: 0.8             // its radius in glyph heights (at most what two columns cover)
+    property real glow: 0.1                   // halo around each head, 0 for none
+    property real glowSize: 1             // its radius in glyph heights (at most what two columns cover)
     property real headWidth: 0.5            // motion 1: width of the head's highlight in rows (not a setting)
     property real headFade: 0               // motion 2: 0 the head's character crossfades evenly; up to 0.5, quicker
     property bool logFrameRate: false       // write the measured frame rate to the log every 2 s
@@ -166,19 +166,41 @@ Item {
         }
     }
 
+    // The clock in two parts that stay exact in a 32-bit float (see elapsed() in the shaders).
+    readonly property real tickHigh: Math.floor(tick / 128)
+    readonly property real tickLow: tick - tickHigh * 128
+
+    // Every drop's place, once per frame (../shaders/drops.frag): one texel per column (plus two
+    // either side) and drop, read by the rain shader below.
+    ShaderEffect {
+        id: dropTable
+        width: root.columns + 4
+        height: 4
+        visible: false
+        layer.enabled: true
+        layer.smooth: false
+        layer.format: ShaderEffectSource.RGBA32F
+        layer.textureSize: Qt.size(width, height)
+        readonly property real tickHigh: root.tickHigh
+        readonly property real tickLow: root.tickLow
+        readonly property real trailLength: root.trailLength
+        readonly property size grid: Qt.size(root.columns, root.rows)
+        fragmentShader: Qt.resolvedUrl("../shaders/drops.frag.qsb")
+    }
+
     ShaderEffect {
         anchors.fill: parent
         blending: false                     // opaque: nothing behind it has to be drawn
 
-        readonly property real tickHigh: Math.floor(root.tick / 128)
-        readonly property real tickLow: root.tick - tickHigh * 128
+        readonly property real tickHigh: root.tickHigh
+        readonly property real tickLow: root.tickLow
         readonly property real glyphCount: root.glyphList.length
         readonly property real headCount: root.headCount
         readonly property real trailFloor: root.trailFloor
         readonly property real lift: root.lift
         readonly property real glide: root.glide
         readonly property real dropCount: Math.max(1, Math.min(4, root.drops))
-        readonly property real trailLength: root.trailLength
+        readonly property Item dropTex: dropTable
         readonly property real trailCurve: root.trailCurve
         readonly property real glow: root.glow
         readonly property real glowSize: Math.max(0.05, root.glowSize)

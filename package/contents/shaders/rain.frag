@@ -19,7 +19,6 @@ layout(std140, binding = 0) uniform buf {
     float lift;        // 0: the image's own brightness; 1: every cell at full brightness in its own hue
     float glide;       // motion: 0 steps cell by cell; 1 smooth light over the fixed glyphs; 2 the head falls as a glyph of its own
     float dropCount;   // drops per column, 1 to 4
-    float trailLength; // trail lengths scaled by this (1: 8 rows up to 70 % of the screen)
     float trailCurve;  // the trail fades as (1 - distance from the head)^trailCurve: 1 evenly, more quickly
     float glow;        // brightness of the halo around each head, 0 for none
     float glowSize;    // its radius, in glyph heights
@@ -34,6 +33,7 @@ layout(std140, binding = 0) uniform buf {
 };
 layout(binding = 1) uniform sampler2D imageTex;  // about one texel per cell
 layout(binding = 2) uniform sampler2D atlasTex;  // one cell per glyph, one texel per pixel
+layout(binding = 3) uniform sampler2D dropTex;   // drops.frag: per column (and two either side) and drop, (head, trail length)
 
 // Dave Hoskins' hash12: no sin(), so it gives the same numbers on every GPU.
 float hash(vec2 p) {
@@ -56,20 +56,14 @@ float elapsed(float m) {
 // Speed, length and the gap before it comes round again are fixed per column and seed. The
 // speed is a whole number of 32nds of a row per tick, so the drop's place repeats exactly every
 // 32 periods of the clock.
-// The trail's length follows the speed, as if each glyph faded over time once the head had
-// passed: a faster drop leaves a longer trail (the fastest about 1.5 times the drawn length, the
-// slowest about half; on average as before). Drawn independently, a fast drop with a short tail
-// looked wrong.
-vec4 dropShape(float col, float seed) {  // speed, trail length, period, start
-    float speed = floor(mix(10.0, 33.0, hash(vec2(col, seed)))) / 32.0;  // 0.31 to 1 row per tick
-    float len = max(2.0, floor(mix(8.0, 0.7 * grid.y, hash(vec2(col, seed + 1.0))) * trailLength * speed * 1.5));
-    float period = floor(grid.y + len + grid.y * hash(vec2(col, seed + 2.0)));
-    return vec4(speed, len, period, floor(period * hash(vec2(col, seed + 3.0))));
+// Where drop i of column `col` is: x its head's place along the column, in rows (on screen while
+// between 0 and the rows on screen plus its trail), y the length of its trail. Worked out once per
+// frame for all columns by drops.frag; computing them here took up to 20 drops per pixel with the
+// glow, which cost about a third of the GPU on a 5120×1440 screen at 240 fps.
+vec2 dropAt(float col, float i) {
+    return texture(dropTex, vec2((col + 2.5) / (grid.x + 4.0), (i + 0.5) / 4.0)).xy;
 }
-vec2 dropAt(float col, float seed) {
-    vec4 s = dropShape(col, seed);
-    return vec2(mod(elapsed(32.0 * s.z) * s.x + s.w, s.z), s.y);
-}
+
 // The glyph a cell shows now. Each cell swaps its glyph on its own clock, every 4 to 40 ticks.
 // The epoch is kept small because the hash loses its randomness on large inputs; it repeats
 // after 512 swaps. Even rows take the glyphs at even places in the set, odd rows those at odd
@@ -152,7 +146,7 @@ void main() {
         if (abs(dc) > reach) continue;
         for (float i = 0.0; i < 4.0; i += 1.0) {
             if (i >= dropCount) break;
-            vec2 drop = dropAt(cell.x + dc, 7.0 * i);
+            vec2 drop = dropAt(cell.x + dc, i);
             if (dc == 0.0) {
                 vec2 lit = lightAt(drop, row);
                 drops = max(drops, lit);

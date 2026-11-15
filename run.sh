@@ -4,7 +4,7 @@
 #                          does not touch the desktop
 #   ./run.sh check         run the checks
 #   ./run.sh shots [name]  render every state off-screen to .dev/shots/ and audit it
-#   ./run.sh build         bake the shader (needs qsb, see docs/deps.md)
+#   ./run.sh build         bake the shaders (needs qsb, see docs/deps.md)
 #   ./run.sh install       install or upgrade the package for this user
 #   ./run.sh apply         switch every desktop to it, with the image each one shows now
 #   ./run.sh revert        switch every desktop back to Plasma's image wallpaper
@@ -14,20 +14,20 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 id=io.github.tominocz.matrixwallpaper
-frag=package/contents/shaders/rain.frag
-
-# Bake the shader when its source is newer than the baked file (or always, with `force`).
-# File times mean little after a clone, so without qsb this only warns: the baked file in the
-# repository matches its source unless you edited the source.
+# Bake each shader whose source is newer than its baked file (or all, with `force`). File times
+# mean little after a clone, so without qsb this only warns: the baked files in the repository
+# match their sources unless you edited one.
 bake() {
-  [[ ${1:-} == force || $frag -nt $frag.qsb ]] || return 0
-  local qsb=${QSB:-$(command -v qsb || echo /usr/lib/qt6/bin/qsb)}
-  if [[ ! -x $qsb ]]; then
-    echo "run.sh: qsb is not installed (sudo apt install qt6-shader-baker); using the baked shader as it is. If you edited $frag, it is stale." >&2
-    [[ ${1:-} == force ]] && exit 1
-    return 0
-  fi
-  "$qsb" --glsl "100 es,120,150" -o "$frag.qsb" "$frag"
+  local qsb=${QSB:-$(command -v qsb || echo /usr/lib/qt6/bin/qsb)} frag
+  for frag in package/contents/shaders/*.frag; do
+    [[ ${1:-} == force || $frag -nt $frag.qsb ]] || continue
+    if [[ ! -x $qsb ]]; then
+      echo "run.sh: qsb is not installed (sudo apt install qt6-shader-baker); using the baked $frag.qsb as it is. If you edited $frag, it is stale." >&2
+      [[ ${1:-} == force ]] && exit 1
+      continue
+    fi
+    "$qsb" --glsl "100 es,120,150" -o "$frag.qsb" "$frag"
+  done
 }
 # Run a Plasma desktop script (https://develop.kde.org/docs/plasma/scripting/api/).
 plasma() { qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$1"; }

@@ -57,7 +57,7 @@ def black_cells(frame, width: int = 12, height: int = 20) -> int:
 
 
 def check_trail_floor_keeps_every_glyph_lit() -> None:
-    window = rain.view(480, 240, trailFloor=0, cellHeight=20)  # 40 x 12 cells of 12 x 20 px
+    window = rain.view(480, 240, trailFloor=0, cellHeight=20, drops=2, glow=0)  # 40 x 12 cells of 12 x 20 px
     assert black_cells(rain.grab(window, 200)) > 100, "with no floor, cells between the drops should be black"
     window.rootObject().setProperty("trailFloor", 0.3)
     assert black_cells(rain.grab(window, 200)) == 0, "with a floor, no cell may go black"
@@ -65,7 +65,8 @@ def check_trail_floor_keeps_every_glyph_lit() -> None:
 
 def check_lift_brightens_and_keeps_the_hue() -> None:
     dark = rain.bands(TMP / "dark.png", (1280, 720), shade=204)  # a fifth as bright
-    window, red_band = rain.view(1280, 720, dark, lift=0), QRect(30, 0, 260, 720)
+    window = rain.view(1280, 720, dark, lift=0, trailFloor=0.25, drops=2, glow=0, trailCurve=1)
+    red_band = QRect(30, 0, 260, 720)
     as_is = rain.mean_rgb(rain.grab(window, 200), red_band)[RED]
     window.rootObject().setProperty("lift", 1)
     lifted = rain.grab(window, 200)
@@ -93,7 +94,7 @@ def check_grid_ends_at_the_edges() -> None:
     # With every glyph fully lit, a cut glyph shows as lit pixels in the outermost line. Digits
     # only: they keep clear of their cell's border, which "|" does not.
     # Glide off: with it, a head glyph entering at the top slides in and is rightly drawn in part.
-    frame = rain.grab(rain.view(500, 250, trailFloor=1, cellHeight=20, glyphs="0123456789", glide=0), 200)
+    frame = rain.grab(rain.view(500, 250, trailFloor=1, cellHeight=20, glyphs="0123456789", glide=0, glow=0), 200)
     edges = {"left": QRect(0, 0, 1, 250), "right": QRect(499, 0, 1, 250), "top": QRect(0, 0, 500, 1), "bottom": QRect(0, 249, 500, 1)}
     for name, line in edges.items():
         assert rain.mean_rgb(frame, line) == (0, 0, 0), f"glyphs are cut off at the {name} edge"
@@ -113,7 +114,7 @@ def half_lit_cells(frame, width: int = 12, height: int = 20) -> int:
 def check_light_glides_through_glyphs() -> None:
     # "|" has ink from the top of its cell to the bottom, so only the light can make one half
     # of a cell darker than the other.
-    window = rain.view(480, 240, trailFloor=0, cellHeight=20, glyphs="|", glide=0)
+    window = rain.view(480, 240, trailFloor=0, cellHeight=20, glyphs="|", glide=0, glow=0)
     assert half_lit_cells(rain.grab(window, 200.5)) == 0, "with glide 0 a glyph must be lit as a whole"
     window.rootObject().setProperty("glide", 1)
     gliding = half_lit_cells(rain.grab(window, 200.5))
@@ -126,7 +127,7 @@ def check_it_fades_smoothly_for_years() -> None:
     # start and after about a year of running (1e9 rows at 30 rows a second): a clock held in
     # one 32-bit float loses its fraction as it grows, and after five hours the motion went
     # coarse.
-    window = rain.view(480, 240, trailFloor=0, cellHeight=20)
+    window = rain.view(480, 240, trailFloor=0, cellHeight=20, glow=0, drops=2)
     for start in (100, 1e9):
         frames = [rain.grab(window, start + step / 10) for step in range(10)]
         smooth = sum(len({rain.mean_rgb(f, QRect(x, 0, 12, 240)) for f in frames}) == 10 for x in range(0, 480, 12))
@@ -151,7 +152,7 @@ def check_glyph_size_change_keeps_the_picture() -> None:
     # A new glyph size means the picture is decoded again at the new grid. The frame right after
     # the change must still show it (the old decode), not the green fallback while it reloads.
     # A large picture, so that decoding it again takes longer than one frame, as a photo does.
-    window = rain.view(640, 360, rain.bands(TMP / "big-bands.png", (6000, 3000)), trailFloor=0.5, cellHeight=20)
+    window = rain.view(640, 360, rain.bands(TMP / "big-bands.png", (6000, 3000)), trailFloor=0.5, cellHeight=20, glow=0)
     root = window.rootObject()
     for height in (21, 14, 30):
         root.setProperty("cellHeight", height)
@@ -166,7 +167,7 @@ def brightness(frame) -> float:
 
 def check_tuning_knobs_do_what_they_say() -> None:
     # Each knob against its own opposite, on the same frame of the green rain with no trail floor.
-    window = rain.view(640, 360, trailFloor=0, cellHeight=20)
+    window = rain.view(640, 360, trailFloor=0, cellHeight=20, glow=0, drops=2, trailCurve=1)
     root = window.rootObject()
 
     def light(**props) -> float:
@@ -191,7 +192,7 @@ def head_unevenness(**props) -> float:
     is white, its trail coloured), weighted linearly as the eye roughly does."""
     import numpy as np  # only this check needs it
 
-    window = rain.view(640, 360, trailFloor=0, drops=1, speed=400, **props)
+    window = rain.view(640, 360, trailFloor=0, drops=1, speed=400, glow=0, **props)
     root = window.rootObject()
     cell_width, step = 640 / root.property("columns"), 400 / root.property("cellHeight") / 240
 
@@ -231,7 +232,7 @@ def check_falling_heads_never_shrink_to_a_dot() -> None:
     # column with a head, frame by frame; its least over half a second against its typical.
     import numpy as np
 
-    window = rain.view(640, 360, trailFloor=0, cellHeight=24, glide=2, glyphs="01.", notHeads=".", drops=1)
+    window = rain.view(640, 360, trailFloor=0, cellHeight=24, glide=2, glyphs="01.", notHeads=".", drops=1, glow=0)
     root = window.rootObject()
     width, step = 640 / root.property("columns"), 400 / 24 / 240
 
@@ -260,7 +261,7 @@ def check_no_glyph_repeats_its_neighbour_above() -> None:
     # by cell: two cells above each other with the same pixels show the same glyph.
     import numpy as np  # only this check and the motion check need it
 
-    window = rain.view(640, 360, trailFloor=1, cellHeight=20, glide=0)
+    window = rain.view(640, 360, trailFloor=1, cellHeight=20, glide=0, glow=0)
     for tick in (100, 200, 300):
         frame = rain.grab(window, tick).convertToFormat(QImage.Format.Format_RGBX8888)
         green = np.frombuffer(frame.constBits().asstring(frame.sizeInBytes()), np.uint8).reshape(360, 640, 4)[:, :, 1]
@@ -276,7 +277,7 @@ def check_faster_drops_leave_longer_trails() -> None:
     import numpy as np
 
     # Tall, with trails at half length, so that most trails end on screen and can be measured.
-    window = rain.view(640, 1440, trailFloor=0, cellHeight=20, glide=0, drops=1, trailCurve=1, trailLength=0.5)
+    window = rain.view(640, 1440, trailFloor=0, cellHeight=20, glide=0, drops=1, trailCurve=1, trailLength=0.5, glow=0)
     columns, rows = window.rootObject().property("columns"), window.rootObject().property("rows")
 
     def cells(tick):

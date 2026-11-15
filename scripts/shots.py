@@ -69,8 +69,8 @@ SHOTS = {
 
 # The settings page as Plasma's dialog would show it: name -> (window size, cfg_ properties).
 CONFIG = rain.ROOT / "package/contents/ui/config.qml"
-DEFAULTS = {"cfg_CellHeight": 16, "cfg_Speed": 480, "cfg_TrailFloor": 0.25, "cfg_Lift": 0.5, "cfg_Glide": 2,
-            "cfg_Drops": 2, "cfg_TrailLength": 1, "cfg_TrailCurve": 1, "cfg_Glow": 0, "cfg_GlowSize": 0.8}
+DEFAULTS = {"cfg_CellHeight": 20, "cfg_Speed": 400, "cfg_TrailFloor": 0.1, "cfg_Lift": 0.5, "cfg_Glide": 2,
+            "cfg_Drops": 1, "cfg_TrailLength": 1, "cfg_TrailCurve": 1, "cfg_Glow": 0.1, "cfg_GlowSize": 1}
 PAGES = {
     "settings": lambda: ((760, 1000), {**DEFAULTS, "cfg_Image": str(fixture())}),
     "settings-green": lambda: ((760, 1000), {**DEFAULTS, "cfg_Image": "", "cfg_Glide": 0, "cfg_CellHeight": 24, "cfg_Glow": 0.6}),

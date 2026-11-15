@@ -11,16 +11,16 @@
     </entry>
     <entry name="CellHeight" type="Int">
       <label>Height of one glyph cell in pixels. Smaller cells give a finer picture and, at the same speed, more steps a second.</label>
-      <default>16</default>
+      <default>20</default>
       <min>4</min>
     </entry>
     <entry name="Speed" type="Double">
       <label>How fast the rain falls: pixels per second for the fastest drops. The slowest fall at a third of it. A smaller cell therefore steps more often.</label>
-      <default>480</default>
+      <default>400</default>
     </entry>
     <entry name="TrailFloor" type="Double">
       <label>How dark a trail may get, 0 to 1. 0: it fades to black. Above 0: every glyph stays at least this bright, so the image stays visible between the drops.</label>
-      <default>0.25</default>
+      <default>0.1</default>
       <min>0</min>
       <max>1</max>
     </entry>
@@ -38,7 +38,7 @@
     </entry>
     <entry name="Drops" type="Int">
       <label>Drops falling in each column at once, 1 to 4.</label>
-      <default>2</default>
+      <default>1</default>
       <min>1</min>
       <max>4</max>
     </entry>
@@ -56,13 +56,13 @@
     </entry>
     <entry name="Glow" type="Double">
       <label>Brightness of the soft halo around each drop's head, 0 to 1. 0: no halo.</label>
-      <default>0</default>
+      <default>0.1</default>
       <min>0</min>
       <max>1</max>
     </entry>
     <entry name="GlowSize" type="Double">
       <label>Radius of the halo, in glyph heights.</label>
-      <default>0.8</default>
+      <default>1</default>
       <min>0.2</min>
       <max>1.5</max>
     </entry>
