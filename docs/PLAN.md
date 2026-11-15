@@ -91,10 +91,11 @@ the screen (as "scaled and cropped" does) is two numbers passed to the shader.
 | `package/metadata.json` | Tells Plasma this is a wallpaper, and its id `io.github.tominocz.matrixwallpaper`. |
 | `package/contents/config/main.xml` | The settings and their defaults: `Image`, `CellHeight`, `Speed`, `TrailFloor`, `Lift`, `Glide`, `LogFrameRate`. |
 | `package/contents/ui/main.qml` | What Plasma loads: a `WallpaperItem` that hands the settings to `MatrixRain` and pauses it while a fullscreen window has the focus (§4.16). |
+| `package/contents/ui/config.qml` | The settings page in Plasma's desktop dialog: picture, glyph size, speed, trail floor, lift, glide, and a live preview that is `MatrixRain` itself (§4.17). |
 | `package/contents/ui/MatrixRain.qml` | The effect: frame clock, image texture, glyph texture, the shader's inputs. Plain QtQuick, no KDE imports. |
 | `package/contents/shaders/rain.frag` | The rain. `rain.frag.qsb` is its baked form, the file Qt loads; both are in the repository. |
 | `scripts/rain.py` | Loads `MatrixRain.qml` outside Plasma: hidden window + `grab(tick)` for shots and checks; run directly, the live preview. |
-| `scripts/shots.py` | Renders the named states to `.dev/shots/` and audits each frame. |
+| `scripts/shots.py` | Renders the named states of the rain and of the settings page to `.dev/shots/` and audits each frame. |
 | `scripts/readme.py` | Makes the README's pictures in `docs/images/` (needs ffmpeg). |
 | `tests/check.py` | Asserts on rendered frames: colour follows the image, crop, fallback, trail floor, lift, no glyph cut at an edge, it fades smoothly, the light slides through glyphs with glide, the clock runs at the display's frame rate and stops at speed 0, it moves, it keeps no state; and that the defaults in `MatrixRain.qml` equal those in `main.xml`. |
 | `run.sh` | Entry point: preview, `check`, `shots`, `build`, `install`, `apply`, `revert`, `set`, `perf`. |
@@ -374,6 +375,50 @@ With an auto-hiding panel a maximized window does cover the screen and pauses th
 invisible then anyway. The tooling cannot check this code outside Plasma (§3 rule 3); it was
 checked in plasmashell. A frame-rate cap was left out: the owner wants 240.
 
+### 4.17 The settings page
+
+`config.qml`, the page Plasma shows under "Configure Desktop and Wallpaper", follows Plasma's own
+wallpaper pages: a `Kirigami.FormLayout` with one `cfg_<Key>` property per setting, which Plasma
+fills from the configuration and saves on Apply. Image (a path field and a file chooser), glyph
+size, speed, the two sliders and the glide checkbox; `LogFrameRate` stays off the page (it is for
+`./run.sh perf`). Each field has one line saying what it does.
+
+On top is a live preview, and it is simply `MatrixRain` with the page's values, so it shows the
+real thing before Apply: glyph size and speed as on the desktop, the whole picture fitted into a
+frame of the screen's shape that shrinks with the dialog. The page has no Plasma imports
+(Kirigami and Qt Quick Controls only), so the harness loads it like any QML file.
+
+`MatrixRain.image` became a path (or URL) string, converted in one place (`toUrl`), so the page,
+`main.qml` and the harness all pass what the setting holds.
+
+Checked by `check_settings_page_covers_every_setting` (every setting but `LogFrameRate` is on the
+page and survives the round trip through its control; it fails when a setting is added to
+`main.xml` and not to the page) and three shots, `settings`, `settings-green` and
+`settings-narrow`, audited for Qt warnings, any visible item reaching past the window, and a
+preview that shows the green fallback although a picture is set. Both audits were seen to fail:
+a fixed-width preview overflowed the narrow window, and grabbing before the layout had settled
+showed the fallback.
+
+Tried in Plasma's real dialog by the owner (2026-11-15): "seems to work". With `LogFrameRate`
+on, the preview logs its own frame rate (as "MatrixWallpaper preview:", which `./run.sh perf`
+ignores): a steady 120 frames a second in the dialog. Plasmashell draws all its windows on one
+thread, so with the dialog open it and the desktop share the display's 240; outside Plasma two
+windows in one process showed the same halving. Apply saved the values.
+
+Changing the glyph size used to flash the rain green for a few frames, in the preview and on the
+desktop: a new size means the picture is decoded again, and the `Image` the shader draws from
+was empty while it reloaded. Now a second, hidden `Image` (`decoding`) decodes each new picture
+or size and hands it to the one the shader uses (`colours`) only when done; `colours` takes it
+from Qt's image cache at once. `check_glyph_size_change_keeps_the_picture` uses a 6000×3000
+picture so that decoding takes longer than a frame (with a small one the race hid the bug); it
+failed on the old code.
+
+Two harness lessons from it: a hidden window lays itself out only when it is drawn, so a shot
+must draw, wait for pictures, and draw again until nothing changes; and fixture pictures are
+written to a temporary name and swapped in, because a view still loading the previous copy read
+a half-written file. `MatrixRain.ready` now waits for the picture itself (ready or failed): it
+used to say ready in the moment between the source being set and its loading starting.
+
 ## 5. The look
 
 What the owner asked for: "a live cmatrix-like animation where each letter takes the color of
@@ -392,7 +437,7 @@ which `TrailFloor` and `Lift` the owner likes on the real desktop.
 
 - `./run.sh` shows the rain live in a window, coloured from the current wallpaper image.
 - `./run.sh set KEY VALUE` changes a setting of the running desktop wallpaper at once, with no
-  restart: the way to try a cell size or speed by eye until the settings page exists (M5).
+  restart and no dialog; Plasma's dialog (§4.17) does the same with a preview.
 - `./run.sh perf` prints what the running wallpaper costs (plasmashell and compositor CPU, GPU,
   power) and its real frame rate, late frames and worst gap, read from plasmashell's log.
 - `./run.sh check` shows one small window for about three seconds (the frame-rate check: frames
@@ -418,5 +463,5 @@ working files (`.ponytail/plans/`, not in the repository). In short:
 - M2 — First run inside Plasma ✅
 - M3 — Measure, then optimise ✅ (paused while a fullscreen window has the focus; no frame cap)
 - M4 — The look
-- M5 — Settings in the wallpaper dialog
+- M5 — Settings in the wallpaper dialog ✅ (§4.17)
 - M6 — Public release (MIT, github.com/TominoCZ/MatrixWallpaper)

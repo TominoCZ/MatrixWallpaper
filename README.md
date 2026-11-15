@@ -36,8 +36,7 @@ The same screenshot at real size:
   over your desktop.
 
 **Status: early, and a project for fun.** It has run on one machine so far (Kubuntu 26.04,
-Plasma 6.6, Wayland, NVIDIA). There is no settings page in Plasma's wallpaper dialog yet; settings are
-changed from the command line (below).
+Plasma 6.6, Wayland, NVIDIA).
 
 ## Install
 
@@ -70,7 +69,12 @@ wallpaper's new code.
 Try it without touching the desktop: `./run.sh` opens the rain in a window, coloured from your
 current wallpaper (this needs the development packages in [`docs/deps.md`](docs/deps.md)).
 
-Settings are changed with `./run.sh set KEY VALUE` and take effect at once, while it runs:
+**Settings:** right-click the desktop, *Configure Desktop and Wallpaper…*. The page has a live
+preview of the rain with your settings before you apply them, a file chooser for the picture,
+and a line under each setting saying what it does.
+
+The same settings can be changed from a terminal with `./run.sh set KEY VALUE`, which takes
+effect at once:
 
 | Key | What it does | Default |
 |---|---|---|
