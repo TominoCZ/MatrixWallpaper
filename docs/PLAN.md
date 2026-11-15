@@ -29,8 +29,10 @@ Three decisions carry everything else:
    wallpaper dialog keep working, and "the current wallpaper" is read from Plasma itself.
 
 Since 2026-11-15 it is the wallpaper on the owner's desktop (Plasma 6.6.6, Wayland,
-5120×1440). At a true 240 frames a second it costs plasmashell about 25 % of one core and the machine
-about 6 W more than a photo; pausing when covered and a cheaper mode are M3.
+5120×1440). At a true 240 frames a second it costs plasmashell about a fifth of one core (the
+rain itself 5 %, the rest is the desktop window being redrawn) and the machine about 6 W more
+than a photo, and 1 % while a fullscreen window (a game) has the focus. Nothing degrades over time: the clock stays exact for years (§4.14) and a
+per-frame memory leak in NVIDIA's driver is worked around (§4.15).
 
 ## 1. Goals and non-goals
 
@@ -38,7 +40,8 @@ about 6 W more than a photo; pausing when covered and a cheaper mode are M3.
   - A live Matrix rain as the desktop wallpaper on Kubuntu (Plasma 6, Wayland), coloured per cell
     from the wallpaper image the desktop had.
   - As cheap as it can be made: all per-pixel work on the GPU, nothing per glyph on the CPU, one
-    draw call per frame, nothing at all when the desktop is covered (M3).
+    draw call per frame.
+  - Nothing gets worse the longer it runs: frame rate, smoothness, memory.
   - Every claim about cost backed by a measurement (M3), on the owner's machine: RTX 3080 Ti,
     one 5120×1440 screen at 240 Hz.
 - **Non-goals (for now):**
@@ -87,7 +90,7 @@ the screen (as "scaled and cropped" does) is two numbers passed to the shader.
 |---|---|
 | `package/metadata.json` | Tells Plasma this is a wallpaper, and its id `io.github.tominocz.matrixwallpaper`. |
 | `package/contents/config/main.xml` | The settings and their defaults: `Image`, `CellHeight`, `Speed`, `TrailFloor`, `Lift`, `Glide`, `LogFrameRate`. |
-| `package/contents/ui/main.qml` | What Plasma loads: a `WallpaperItem` that hands the settings to `MatrixRain`. Nothing else. |
+| `package/contents/ui/main.qml` | What Plasma loads: a `WallpaperItem` that hands the settings to `MatrixRain` and pauses it while a fullscreen window has the focus (§4.16). |
 | `package/contents/ui/MatrixRain.qml` | The effect: frame clock, image texture, glyph texture, the shader's inputs. Plain QtQuick, no KDE imports. |
 | `package/contents/shaders/rain.frag` | The rain. `rain.frag.qsb` is its baked form, the file Qt loads; both are in the repository. |
 | `scripts/rain.py` | Loads `MatrixRain.qml` outside Plasma: hidden window + `grab(tick)` for shots and checks; run directly, the live preview. |
@@ -104,9 +107,12 @@ the screen (as "scaled and cropped" does) is two numbers passed to the shader.
    them or asks for it in that session. Preview, shots and checks run in their own (hidden) windows. Reason: a broken shader on
    the real desktop is a black screen behind every window.
 3. **`main.qml` stays a thin wrapper.** Anything in it cannot be rendered or checked outside
-   Plasma. Reason: that is the only code the tooling cannot see.
+   Plasma. Reason: that is the only code the tooling cannot see. The one exception is the
+   fullscreen pause (§4.16), which needs Plasma's window list; check it in plasmashell.
 4. **No tool is fetched from the internet and run without the owner saying so.** Reason: the
    owner's rule (and their permission setup enforces it); see §4.6.
+5. **System settings outside the project are the owner's call** (the EGL workaround of §4.15
+   included): describe them, apply them only when asked.
 
 ## 4. Decisions
 
@@ -167,12 +173,14 @@ a step. Cheapest, but it looks like `cmatrix`, in steps.
 **Cost on the owner's desktop**, plasmashell's share of one core: photo 1 %, 24 steps a second
 5 %, 62.5 fps 12 %, 240 fps 25 %. The compositor stays at 8 to 9 % throughout (it presents at
 240 Hz anyway) and power goes from about 89 W to 94.5 W. With `Speed` 0 the wallpaper costs
-what a photo does. Most of the 25 % is probably the whole desktop window (icons, widgets)
-being redrawn each frame on the GUI thread, not the shader; not yet measured (M3).
+what a photo does. Of that quarter core the rain itself is about 5 %: measured in a window
+outside Plasma at 240 fps, the same at 320×200 and 1280×720. The rest is Qt Quick redrawing
+everything else in the desktop window each frame (icons, widgets); it fell from 25 % to 19 %
+when the owner's desktop went from many icons to one folder. A wallpaper cannot keep the rest
+of its window from being redrawn; drawing fewer frames is the only lever, which is why it
+pauses under fullscreen windows (§4.16).
 
-The tick wraps at 2²⁰ rows (about 12 hours at the default speed) because the shader holds it in
-a 32-bit float, whose steps would otherwise grow coarse; the wrap is one visible jump. Marked
-`ponytail:` in `MatrixRain.qml`.
+The clock reaches the shader in two parts so that it stays exact for years (§4.14).
 
 ### 4.4 Textures: image at one texel per cell, glyphs drawn at run time
 
@@ -284,6 +292,88 @@ soft band that travels down the screen two pixels per frame, through the glyphs.
 The owner on seeing it: "seems very smooth now". `./run.sh set Glide 0` and `1` compare the
 two live.
 
+### 4.14 The clock stays exact however long it runs
+
+Found on 2026-11-15 when the owner asked for a check that nothing degrades over time. The clock
+reached the shader as one 32-bit float, wrapping at 2²⁰ rows. A float's resolution coarsens as
+it grows: after 5 hours of running, frames 1/30 of a row apart gave only 6 different images out
+of 10 (the motion moved in 1 px steps), after 9 hours 2 px steps, then the wrap jumped.
+
+Now `MatrixRain.qml` keeps the clock as a double and hands the shader `tickHigh` (whole 128s of
+rows) and `tickLow` (the rest, with the fraction). The shader's `elapsed(m)` works out the clock
+modulo a whole number `m` exactly from those, and everything that depends on time is made to
+repeat after a whole number of rows: each drop's speed is a whole number of 32nds of a row per
+tick (0.31 to 1, was any value from 0.3 to 1), so its place repeats after 32 of its periods; each
+cell swaps its glyph every whole number of ticks (4 to 40). The look is unchanged. The clock now
+wraps at 2³¹ rows, 2.3 years at the default speed. `check_it_fades_smoothly_for_years` checks
+the motion at the start and after 10⁹ rows; it failed on the old clock.
+
+`elapsed()` is exact while `m` is below 65536, i.e. while a column's period (up to 2.7 times the
+rows on screen) times 32 stays under it: up to about 750 rows, so cells of 2 px on a 1440 px
+screen. `CellHeight` has a minimum of 4.
+
+Also hardened for long runs: a system clock set back no longer makes the frame time negative
+(the gap must be positive to count), the frame counter is a double, and the frame-rate check
+hides and shows its window to prove the clock starts again by itself (screen off, lock screen).
+
+### 4.15 The NVIDIA driver leaks memory per presented frame
+
+Found the same day: plasmashell's memory grew by about 55 kB a second while the rain ran and by
+about 12 kB/s with `Speed` 0, linearly, with no sign of levelling off over 6 minutes (about
+200 MB an hour, several GB a day). Narrowed down in a window outside Plasma:
+
+| Test at 240 fps | memory per frame |
+|---|---|
+| the rain | +232 bytes |
+| a plain Rectangle on the same frame chain, no shader | +294 bytes |
+| the same with a forced JavaScript `gc()` every 2000 frames | +237 bytes |
+| Qt's threaded render loop | +281 bytes |
+| Qt Quick on Vulkan instead of OpenGL | +42 bytes |
+| a bare `QOpenGLWindow`, no Qt Quick at all | +230 bytes |
+| the bare window with NVIDIA's older `libnvidia-egl-wayland` 1.1.21 | 0 bytes |
+| the rain with `libnvidia-egl-wayland` 1.1.21 | +28 bytes (noise), CPU 6.1 % against 4.9 % |
+
+So it is NVIDIA's new EGL Wayland library, `libnvidia-egl-wayland2`
+(`/usr/share/egl/egl_external_platform.d/09_nvidia_wayland2.json`, driver 595.99.02), which takes
+precedence over the older one when both are installed. Any Qt OpenGL program leaks the same per
+presented frame; a static wallpaper presents almost none, so it never showed before.
+`es2gears_wayland` grew only 25 bytes a frame, so it may depend on something Qt does (Qt
+presents with swap interval 0 and throttles on frame callbacks itself); not investigated.
+
+The workaround is to point plasmashell alone at the older library with the EGL loader's
+`__EGL_EXTERNAL_PLATFORM_CONFIG_FILENAMES` variable, in a systemd drop-in for
+`plasma-plasmashell.service` (README, "Known limits"). Rejected: Qt Quick on Vulkan for
+plasmashell, a much larger change to the whole shell for the same result. The wallpaper itself
+cannot choose the EGL library.
+
+Applied on the owner's machine at their request (2026-11-15,
+`~/.config/systemd/user/plasma-plasmashell.service.d/egl-wayland.conf`): plasmashell then loads
+`libnvidia-egl-wayland.so.1.1.21`, still draws 240 frames a second at the same CPU, and its
+memory stayed flat (+40 kB over 75 s, against +55 kB every second before).
+
+### 4.16 Paused while a fullscreen window has the focus
+
+The owner (2026-11-15): "all I would need is detecting a fullscreen window in focus, like a
+fullscreen game, borderless or not", if it is cheap; and first, whether the system already does
+it. It does not: with the owner's fullscreen application up for four minutes the wallpaper kept
+drawing 240 frames a second, so KWin keeps sending frames to a covered desktop. (Plasma's image
+wallpaper pauses its animated pictures with its own `MaximizedWindowMonitor`; that is code in
+that plugin, not something other wallpapers get.)
+
+Built in `main.qml`, because it needs Plasma's `org.kde.taskmanager`: a `TasksModel` limited to
+this screen (the desktop window's geometry, as the image wallpaper does) watches the active
+window. The rain's `running` is off while that window is fullscreen, or its geometry covers its
+whole screen (a borderless game that does not set the fullscreen state). It reacts to
+`activeTaskChanged` and `dataChanged`, so it costs nothing between window events. Measured with a
+fullscreen test window: 0 frames a second while it had the focus, back to 240 at once after;
+plasmashell 1 % of a core while paused against 20 % running.
+
+What it deliberately ignores: a maximized window (the owner asked for fullscreen only; with a
+visible panel it does not cover the screen), and a fullscreen window that has lost the focus.
+With an auto-hiding panel a maximized window does cover the screen and pauses the rain, which is
+invisible then anyway. The tooling cannot check this code outside Plasma (§3 rule 3); it was
+checked in plasmashell. A frame-rate cap was left out: the owner wants 240.
+
 ## 5. The look
 
 What the owner asked for: "a live cmatrix-like animation where each letter takes the color of
@@ -326,7 +416,7 @@ working files (`.ponytail/plans/`, not in the repository). In short:
 
 - M1 — Project setup ✅
 - M2 — First run inside Plasma ✅
-- M3 — Measure, then optimise
+- M3 — Measure, then optimise ✅ (paused while a fullscreen window has the focus; no frame cap)
 - M4 — The look
 - M5 — Settings in the wallpaper dialog
 - M6 — Public release (MIT, github.com/TominoCZ/MatrixWallpaper)

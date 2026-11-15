@@ -31,6 +31,7 @@ The same screenshot at real size:
 - **All on the GPU.** The whole effect is one fragment shader: one draw call, two texture
   lookups per pixel, no particle simulation on the CPU.
 - **Fits the screen.** The glyph grid ends exactly at the screen's edges; no column is cut.
+- **Out of the way of games.** It pauses while a fullscreen window has the focus.
 - **Icons, widgets and panels untouched.** It is a Plasma wallpaper plugin, not a window drawn
   over your desktop.
 
@@ -95,9 +96,9 @@ screen draws a quarter as many frames.
 `./run.sh perf` measures it on your machine: CPU, GPU, and the frame rate the wallpaper
 really reaches.
 
-It does **not yet pause** when a window covers the desktop or the screen is locked. That is the
-next thing to be built. Until then, `./run.sh set Speed 0` stops it and `./run.sh set Speed
-480` starts it again.
+It **pauses while a fullscreen window has the focus**, such as a game, borderless or not: then
+it draws nothing and plasmashell is back to about 1 % of a core. It keeps running behind ordinary
+and maximized windows. `./run.sh set Speed 0` stops it by hand.
 
 ## Known limits
 
@@ -106,7 +107,23 @@ next thing to be built. Until then, `./run.sh set Speed 0` stops it and `./run.s
 - It does not follow a slideshow, or a picture changed later in Plasma's own image wallpaper:
   set `Image` again, or run `./run.sh apply` again.
 - Display scaling other than 100 % is untested.
-- The rain makes one visible jump about every twelve hours (its clock wraps).
+- The rain makes one visible jump after about two years of uninterrupted running (its clock
+  wraps).
+- **NVIDIA: plasmashell's memory grows while the rain runs**, by about 200 MB an hour at 240 fps,
+  because of a leak in NVIDIA's newer EGL Wayland library (`libnvidia-egl-wayland2`), which loses
+  about 230 bytes for every frame any Qt OpenGL program presents. If you have the older
+  `libnvidia-egl-wayland` installed too (Ubuntu ships both), you can point plasmashell alone at
+  it; the path of the `.json` file may differ on other distributions:
+
+  ```sh
+  mkdir -p ~/.config/systemd/user/plasma-plasmashell.service.d
+  printf '[Service]\nEnvironment=__EGL_EXTERNAL_PLATFORM_CONFIG_FILENAMES=%s\n' \
+    /usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json \
+    > ~/.config/systemd/user/plasma-plasmashell.service.d/egl-wayland.conf
+  systemctl --user daemon-reload && systemctl --user restart plasma-plasmashell
+  ```
+
+  To undo it, delete that file and run the last line again.
 - It needs a GPU: Qt's software renderer cannot run the shader.
 
 ## How it works
